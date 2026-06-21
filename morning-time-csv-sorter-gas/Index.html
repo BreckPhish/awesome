@@ -3,8 +3,6 @@
 <head>
   <base target="_top" />
   <meta charset="utf-8" />
-  <!-- SheetJS: builds the downloadable .xlsx that mirrors the master templates. -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <style>
     :root {
       --bg: #f6f7f8;
@@ -79,15 +77,6 @@
 
     .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
 
-    .export-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 8px 0 4px; }
-    .export-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-    .export-grid input { padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
-    .cash-inputs { display: grid; gap: 6px; margin: 6px 0 4px; }
-    .cash-row { display: grid; grid-template-columns: 1fr 120px 120px; gap: 8px; align-items: center; }
-    .cash-row .cash-name { font-size: 13px; }
-    .cash-row input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
-    @media (max-width: 560px) { .cash-row { grid-template-columns: 1fr; } }
-
     .col-copy { margin: 2px 0 10px; }
     .col-copy-label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 2px; }
     .col-buttons { margin: 4px 0 0; }
@@ -152,120 +141,166 @@
 
     code { background: #eef0f2; padding: 1px 4px; border-radius: 4px; }
 
+    .qa-line { margin-top: 8px; font-size: 13px; color: var(--muted); }
+    .qa-line b { color: var(--ink); font-variant-numeric: tabular-nums; }
+    .qa-check { white-space: nowrap; }
+
+    .targets-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .target-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .target-head h2 { margin: 0; }
+    button.big { font-size: 14px; padding: 10px 14px; }
+
+    .details-panel > summary { font-size: 16px; }
+    .details-panel .rules { margin: 8px 0 4px; }
+    .subpanel { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+
+    /* tip-amount inputs */
+    .amount-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 12px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .money { position: relative; }
+    .money::before { content: "$"; position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+    .money input { width: 130px; padding: 9px 9px 9px 20px; border: 1px solid var(--line); border-radius: 8px;
+      font-size: 15px; font-variant-numeric: tabular-nums; background: #fff; }
+    .money input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+
+    table.pool td.money-cell { position: relative; padding: 4px 6px; }
+    table.pool td.money-cell::before { content: "$"; position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); font-size: 12px; }
+    table.pool input { width: 100%; min-width: 78px; padding: 6px 6px 6px 16px; border: 1px solid var(--line);
+      border-radius: 6px; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+    table.pool input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+    .pool-total { margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .pool-total b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
     .hidden { display: none; }
   </style>
 </head>
 <body>
   <main class="app">
     <header class="header">
-      <h1>Morning Time CSV Sorter</h1>
-      <p>Upload the day&rsquo;s time-entry CSV. The tool creates two copy-ready tables for your master spreadsheets.</p>
+      <h1>Morning Tip Sorter</h1>
+      <p>Upload the day&rsquo;s time CSV, then copy each table into your tip sheets. Your Excel templates do the tip math.</p>
     </header>
 
     <section class="panel upload-panel">
-      <h2>1. Upload daily CSV</h2>
       <input id="csv-input" type="file" accept=".csv,text/csv" />
       <div id="status" class="status">No CSV loaded yet.</div>
-      <details>
-        <summary>Sorting rules</summary>
-        <ul>
-          <li><strong>Table 1:</strong> Bussers, Dishwashers, Prep Cooks, Cooks, and all Three Daughters employees.</li>
-          <li><strong>Three Daughters detection:</strong> employee name contains <code>Three Daughters</code>, job contains <code>3D</code>, or location contains <code>Three Daughters</code>.</li>
-          <li><strong>Table 1 names:</strong> first names only; Three Daughters rows get <code> 3D</code> after the name and sort first.</li>
-          <li><strong>Table 1 hours:</strong> combined by displayed first name.</li>
-          <li><strong>Table 2:</strong> Servers, Bartenders, Bar Lead, and Trainer. Trainee is excluded.</li>
-          <li><strong>Table 2 layout:</strong> not combined; sorted by clock-in time and labeled as two independent FOH cash tip pools &mdash; the <strong>AM tip pool</strong> (clock-in before <code>2:00 PM</code>) and the <strong>PM tip pool</strong> (clock-in 2:00 PM &amp; after). Column 5 shows each row&rsquo;s job title.</li>
-          <li><strong>Always excluded:</strong> Online ordering profiles, Toast default profiles, Hosts, Managers (including Hourly Shift Manager), and Chefs never appear in Table 1, Table 2, or unmatched rows.</li>
-          <li><strong>Column copy:</strong> each table has a button per column to copy just that column&rsquo;s values. Table 2&rsquo;s column buttons are split into the AM tip pool (before 2 PM) and PM tip pool (2 PM &amp; after) so each column copies separately per pool.</li>
-          <li><strong>Hours source:</strong> uses <code>Payable Hours</code> first, then falls back to <code>Total Hours</code>.</li>
-        </ul>
-      </details>
     </section>
 
     <section id="qa-panel" class="panel hidden">
-      <h2>2. QA totals</h2>
-      <div class="qa-grid">
-        <div class="qa-card"><div class="qa-label">Source rows</div><div id="qa-source-rows" class="qa-value">0</div></div>
-        <div class="qa-card"><div class="qa-label">Source payable hours</div><div id="qa-source-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Table 1 hours</div><div id="qa-table1-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Table 2 hours</div><div id="qa-table2-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Unmatched hours</div><div id="qa-unmatched-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Excluded hours</div><div id="qa-excluded-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Check total</div><div id="qa-check-total" class="qa-value">0.00</div></div>
-      </div>
       <div id="qa-message" class="status good qa-message">Ready.</div>
+      <div class="qa-line">
+        <b id="qa-source-rows">0</b> rows &middot; source <b id="qa-source-hours">0.00</b> h =
+        3D <b id="qa-table1-hours">0.00</b> + FOH <b id="qa-table2-hours">0.00</b> +
+        unmatched <b id="qa-unmatched-hours">0.00</b> + excluded <b id="qa-excluded-hours">0.00</b>
+        <span class="qa-check">(check total <b id="qa-check-total">0.00</b>)</span>
+      </div>
     </section>
 
-    <section id="results-panel" class="results-grid hidden">
-      <div class="panel">
-        <h2>Table 1 &mdash; BOH / bussers / 3D</h2>
+    <section id="targets" class="targets-grid hidden">
+      <div class="panel target">
+        <div class="target-head">
+          <h2>3D Tips</h2>
+          <button id="copy-t1-namehours" type="button" class="big">Copy Name + Hours</button>
+        </div>
+        <p class="small">BOH + Three Daughters. Paste Name + Hours into the 3D sheet, then put these pool totals in the template&rsquo;s Cash Tips &amp; Credit Tips cells.</p>
+        <div class="amount-row">
+          <div class="field">
+            <label>Cash tips (pool)</label>
+            <div class="money"><input id="d3-cash" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" /></div>
+          </div>
+          <div class="field">
+            <label>Credit tips (pool)</label>
+            <div class="money"><input id="d3-credit" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" /></div>
+          </div>
+        </div>
+        <div id="t1-nh-view"></div>
+      </div>
+
+      <div class="panel target">
+        <div class="target-head">
+          <h2>Tin Plate &middot; AM pool</h2>
+          <button id="copy-t2-am-namehours" type="button" class="big">Copy pool rows</button>
+        </div>
+        <p class="small">FOH clocked in <strong>before 2 PM</strong>. Enter each server&rsquo;s cash transactions &amp; cash tips; &ldquo;Copy pool rows&rdquo; gives Name, Hours, Cash transactions, Cash tips for the AM table.</p>
+        <div id="t2-am-view"></div>
+      </div>
+
+      <div class="panel target">
+        <div class="target-head">
+          <h2>Tin Plate &middot; PM pool</h2>
+          <button id="copy-t2-pm-namehours" type="button" class="big">Copy pool rows</button>
+        </div>
+        <p class="small">FOH clocked in <strong>2 PM &amp; after</strong>. Enter each server&rsquo;s cash transactions &amp; cash tips, then copy the pool rows into the PM table.</p>
+        <div id="t2-pm-view"></div>
+      </div>
+    </section>
+
+    <details id="details-panel" class="panel details-panel hidden">
+      <summary>More detail &amp; other copy options</summary>
+
+      <details class="rules">
+        <summary>Sorting rules</summary>
+        <ul>
+          <li><strong>3D Tips (Table 1):</strong> Bussers, Dishwashers, Prep Cooks, Cooks, and all Three Daughters employees, combined by first name; Three Daughters employees keep a <code> 3D</code> suffix and sort first.</li>
+          <li><strong>Tin Plate (Table 2):</strong> Servers, Bartenders, Bar Lead, and Trainer &mdash; split into the AM pool (clock-in before <code>2:00 PM</code>) and PM pool (2:00 PM &amp; after). Trainee is excluded.</li>
+          <li><strong>Always excluded:</strong> the ghost <code>Three Daughters</code> employee profile, Online ordering, Toast default, Hosts, Managers (incl. Hourly Shift Manager), and Chefs &mdash; never in any tip table.</li>
+          <li><strong>Hours source:</strong> uses <code>Payable Hours</code> first, then falls back to <code>Total Hours</code>.</li>
+        </ul>
+      </details>
+
+      <div class="results-grid">
+        <div class="subpanel">
+          <h2>Table 1 &mdash; 3D Tips (all columns)</h2>
+          <div class="button-row">
+            <button id="copy-t1-rows" type="button" class="secondary">Copy all columns</button>
+            <button id="copy-t1-headers" type="button" class="secondary">Copy with headers</button>
+          </div>
+          <div class="col-copy">
+            <span class="col-copy-label">Copy a single column:</span>
+            <div id="table1-cols" class="button-row col-buttons"></div>
+          </div>
+          <div id="table1-view"></div>
+          <h3>Paste-ready TSV</h3>
+          <textarea id="table1-tsv" readonly></textarea>
+        </div>
+
+        <div class="subpanel">
+          <h2>Table 2 &mdash; Tin Plate pools (all columns)</h2>
+          <div class="button-row">
+            <button id="copy-t2-am" type="button" class="secondary">Copy AM (all columns)</button>
+            <button id="copy-t2-pm" type="button" class="secondary">Copy PM (all columns)</button>
+            <button id="copy-t2-headers" type="button" class="secondary">Copy both with headers</button>
+          </div>
+          <div class="col-copy">
+            <span class="col-copy-label">AM pool &mdash; copy a single column:</span>
+            <div id="table2-cols-lunch" class="button-row col-buttons"></div>
+            <span class="col-copy-label">PM pool &mdash; copy a single column:</span>
+            <div id="table2-cols-dinner" class="button-row col-buttons"></div>
+          </div>
+          <div id="table2-view"></div>
+          <h3>Paste-ready TSV</h3>
+          <textarea id="table2-tsv" readonly></textarea>
+        </div>
+      </div>
+
+      <div class="subpanel">
+        <h2>Unmatched rows</h2>
+        <p class="small">Rows that didn&rsquo;t meet Table 1 or Table 2 rules. Excluded profiles are removed before this section.</p>
         <div class="button-row">
-          <button id="copy-t1-rows" type="button">Copy rows only</button>
-          <button id="copy-t1-headers" type="button" class="secondary">Copy with headers</button>
+          <button id="copy-unmatched" type="button" class="secondary">Copy unmatched with headers</button>
         </div>
-        <div class="col-copy">
-          <span class="col-copy-label">Copy a single column (values only, top to bottom):</span>
-          <div id="table1-cols" class="button-row col-buttons"></div>
-        </div>
-        <div id="table1-view"></div>
-        <h3>Paste-ready TSV</h3>
-        <textarea id="table1-tsv" readonly></textarea>
+        <div id="unmatched-view"></div>
+        <textarea id="unmatched-tsv" readonly></textarea>
       </div>
 
-      <div class="panel">
-        <h2>Table 2 &mdash; FOH cash tip pools</h2>
-        <p class="small">Split into the <strong>AM tip pool</strong> (clock-in before 2 PM) and <strong>PM tip pool</strong> (clock-in 2 PM &amp; after). The two pools are independent &mdash; copy each into its own table.</p>
-        <div class="button-row">
-          <button id="copy-t2-am" type="button">Copy AM tip pool</button>
-          <button id="copy-t2-pm" type="button">Copy PM tip pool</button>
-          <button id="copy-t2-headers" type="button" class="secondary">Copy both with headers</button>
-        </div>
-        <div class="col-copy">
-          <span class="col-copy-label">AM tip pool &mdash; copy a single column (clock-in before 2 PM):</span>
-          <div id="table2-cols-lunch" class="button-row col-buttons"></div>
-          <span class="col-copy-label">PM tip pool &mdash; copy a single column (clock-in 2 PM &amp; after):</span>
-          <div id="table2-cols-dinner" class="button-row col-buttons"></div>
-        </div>
-        <div id="table2-view"></div>
-        <h3>Paste-ready TSV</h3>
-        <textarea id="table2-tsv" readonly></textarea>
+      <div class="subpanel">
+        <h2>Excluded rows (QA only)</h2>
+        <p class="small">Ghost &ldquo;Three Daughters&rdquo; profile, Online ordering, Toast default, Hosts, Managers, and Chefs &mdash; shown only for QA, never in a tip table.</p>
+        <div id="excluded-view"></div>
       </div>
-    </section>
-
-    <section id="excel-panel" class="panel hidden">
-      <h2>3. Build Excel sheets</h2>
-      <p class="small">Enter the day&rsquo;s tip amounts, then download an <code>.xlsx</code> laid out like your master templates &mdash; the formulas (Take Home, Paycheck, Tip Percent, per-hour) are built in, so it computes exactly as if you&rsquo;d filled the template by hand.</p>
-      <div class="export-grid">
-        <label>Date<input id="exp-date" type="date" /></label>
-        <label>3D Cash Tips ($)<input id="exp-3d-cash" type="number" step="0.01" min="0" placeholder="0.00" /></label>
-        <label>3D Credit Tips ($)<input id="exp-3d-credit" type="number" step="0.01" min="0" placeholder="0.00" /></label>
-      </div>
-      <h3>Tin Plate &mdash; AM servers</h3>
-      <p class="small">Enter each server&rsquo;s cash sales and cash tips (from the cash count). Leave a pool blank to skip its table.</p>
-      <div id="exp-am" class="cash-inputs"></div>
-      <h3>Tin Plate &mdash; PM servers</h3>
-      <div id="exp-pm" class="cash-inputs"></div>
-      <div class="button-row">
-        <button id="download-xlsx" type="button">Download Excel workbook</button>
-      </div>
-      <div id="exp-status" class="status good hidden"></div>
-    </section>
-
-    <section id="unmatched-panel" class="panel hidden">
-      <h2>Unmatched rows</h2>
-      <p class="small">Rows that did not meet Table 1 or Table 2 rules. Excluded profiles are removed before this section.</p>
-      <div class="button-row">
-        <button id="copy-unmatched" type="button" class="secondary">Copy unmatched with headers</button>
-      </div>
-      <div id="unmatched-view"></div>
-      <textarea id="unmatched-tsv" readonly></textarea>
-    </section>
-
-    <section id="excluded-panel" class="panel hidden">
-      <h2>Excluded rows</h2>
-      <p class="small">Online ordering, Toast default, Host, Manager, and Chef rows are shown only for QA and are not included in either copy/paste table.</p>
-      <div id="excluded-view"></div>
-    </section>
+    </details>
   </main>
 
   <script>
@@ -280,17 +315,12 @@
         status: document.getElementById("status"),
         input: document.getElementById("csv-input"),
         qaPanel: document.getElementById("qa-panel"),
-        resultsPanel: document.getElementById("results-panel"),
-        unmatchedPanel: document.getElementById("unmatched-panel"),
-        excludedPanel: document.getElementById("excluded-panel"),
-        excelPanel: document.getElementById("excel-panel"),
-        expDate: document.getElementById("exp-date"),
-        exp3dCash: document.getElementById("exp-3d-cash"),
-        exp3dCredit: document.getElementById("exp-3d-credit"),
-        expAm: document.getElementById("exp-am"),
-        expPm: document.getElementById("exp-pm"),
-        expStatus: document.getElementById("exp-status"),
+        targets: document.getElementById("targets"),
+        detailsPanel: document.getElementById("details-panel"),
         qaMessage: document.getElementById("qa-message"),
+        t1NhView: document.getElementById("t1-nh-view"),
+        t2AmView: document.getElementById("t2-am-view"),
+        t2PmView: document.getElementById("t2-pm-view"),
         table1View: document.getElementById("table1-view"),
         table2View: document.getElementById("table2-view"),
         table1Cols: document.getElementById("table1-cols"),
@@ -322,10 +352,20 @@
       document.getElementById("copy-t2-headers").addEventListener("click", function () {
         copyText(toTSV2(latest.table2, latest.table2SplitIndex, true), "Both tip pools with headers copied.");
       });
+      document.getElementById("copy-t1-namehours").addEventListener("click", function () {
+        copyText(twoColumnTSV(latest.table1, "NAMES", "TOTAL HOURS"), "Table 1 Name + Hours copied.");
+      });
+      document.getElementById("copy-t2-am-namehours").addEventListener("click", function () {
+        var split = latest.table2SplitIndex || 0;
+        copyText(poolTSV(latest.table2.slice(0, split), "am"), "AM pool rows copied (Name, Hours, Cash transactions, Cash tips).");
+      });
+      document.getElementById("copy-t2-pm-namehours").addEventListener("click", function () {
+        var split = latest.table2SplitIndex || 0;
+        copyText(poolTSV(latest.table2.slice(split), "pm"), "PM pool rows copied (Name, Hours, Cash transactions, Cash tips).");
+      });
       document.getElementById("copy-unmatched").addEventListener("click", function () {
         copyText(toTSV(latest.unmatched, true), "Unmatched rows copied.");
       });
-      document.getElementById("download-xlsx").addEventListener("click", downloadWorkbook);
     });
 
     function emptyResults() {
@@ -532,14 +572,16 @@
       });
     }
 
-    // Profiles that should never reach any table: online ordering, Toast
-    // default profiles, hosts, managers (incl. hourly shift manager), chefs.
+    // Profiles that should never reach any table: the ghost "Three Daughters"
+    // employee profile, online ordering, Toast default profiles, hosts,
+    // managers (incl. hourly shift manager), and chefs.
     function isAlwaysExcluded(row) {
       var job = get(row, "Job");
       var employee = get(row, "Employee");
       var hay = job + " " + employee;
 
-      return /online\s*order(ing)?/i.test(hay)
+      return /^\s*three\s*daughters\b/i.test(employee)
+        || /online\s*order(ing)?/i.test(hay)
         || /toast\s*default/i.test(hay)
         || /\bdefault\b/i.test(job)
         || /\bhost(ess)?\b/i.test(job)
@@ -673,10 +715,22 @@
 
     function renderAll(processed, sourceRowCount) {
       refs.qaPanel.classList.remove("hidden");
-      refs.resultsPanel.classList.remove("hidden");
-      refs.excelPanel.classList.remove("hidden");
-      refs.unmatchedPanel.classList.remove("hidden");
-      refs.excludedPanel.classList.remove("hidden");
+      refs.targets.classList.remove("hidden");
+      refs.detailsPanel.classList.remove("hidden");
+
+      var amRows = processed.table2.slice(0, processed.table2SplitIndex);
+      var pmRows = processed.table2.slice(processed.table2SplitIndex);
+
+      // Primary workflow: 3D = Name + Hours (with pool tip fields above);
+      // each Tin Plate pool = an editable table for per-server cash entry.
+      renderNameHours(refs.t1NhView, processed.table1, "NAMES", "TOTAL HOURS");
+      renderPoolInputs(refs.t2AmView, amRows, "am");
+      renderPoolInputs(refs.t2PmView, pmRows, "pm");
+
+      var d3Cash = document.getElementById("d3-cash");
+      var d3Credit = document.getElementById("d3-credit");
+      if (d3Cash) d3Cash.value = "";
+      if (d3Credit) d3Credit.value = "";
 
       renderTable(refs.table1View, processed.table1);
       renderTable2(refs.table2View, processed.table2, processed.table2SplitIndex);
@@ -687,14 +741,10 @@
       // into the AM tip pool (before 2 PM) and PM tip pool (2 PM & after).
       var t1Headers = processed.table1.length ? Object.keys(processed.table1[0]) : [];
       var t2Headers = processed.table2.length ? Object.keys(processed.table2[0]) : [];
-      var amRows = processed.table2.slice(0, processed.table2SplitIndex);
-      var pmRows = processed.table2.slice(processed.table2SplitIndex);
 
       buildColumnCopyButtons(refs.table1Cols, processed.table1, t1Headers, "");
       buildColumnCopyButtons(refs.table2ColsLunch, amRows, t2Headers, "AM tip pool");
       buildColumnCopyButtons(refs.table2ColsDinner, pmRows, t2Headers, "PM tip pool");
-
-      renderExportPanel(amRows, pmRows);
 
       refs.table1TSV.value = toTSV(processed.table1, false);
       refs.table2TSV.value = toTSV2(processed.table2, processed.table2SplitIndex, false);
@@ -728,10 +778,8 @@
     function hideResults() {
       if (!refs.qaPanel) return;
       refs.qaPanel.classList.add("hidden");
-      refs.resultsPanel.classList.add("hidden");
-      refs.excelPanel.classList.add("hidden");
-      refs.unmatchedPanel.classList.add("hidden");
-      refs.excludedPanel.classList.add("hidden");
+      refs.targets.classList.add("hidden");
+      refs.detailsPanel.classList.add("hidden");
     }
 
     function sumColumn(rows, key) {
@@ -739,6 +787,151 @@
         var n = parseFloat(String(row[key] || "0").replace(/,/g, ""));
         return sum + (Number.isFinite(n) ? n : 0);
       }, 0);
+    }
+
+    // Editable pool table: Name + Hours (read-only) plus per-server cash
+    // transactions and cash tips inputs, with a live pool total. prefix is
+    // "am" or "pm" so the input ids stay unique.
+    function renderPoolInputs(target, rows, prefix) {
+      target.innerHTML = "";
+
+      if (!rows.length) {
+        target.innerHTML = '<p class="small">No servers in this pool.</p>';
+        return;
+      }
+
+      var table = document.createElement("table");
+      table.className = "pool";
+      var thead = document.createElement("thead");
+      var trHead = document.createElement("tr");
+      ["Name", "Hours", "Cash transactions", "Cash tips"].forEach(function (label, i) {
+        var th = document.createElement("th");
+        th.textContent = label;
+        if (i === 1) th.className = "num";
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+
+      var tbody = document.createElement("tbody");
+      rows.forEach(function (row, i) {
+        var tr = document.createElement("tr");
+
+        var nameTd = document.createElement("td");
+        nameTd.textContent = row["FIRST NAMES"];
+        var hoursTd = document.createElement("td");
+        hoursTd.className = "num";
+        hoursTd.textContent = row["TOTAL HOURS"];
+
+        tr.appendChild(nameTd);
+        tr.appendChild(hoursTd);
+        tr.appendChild(moneyCell(prefix + "-cash-" + i));
+        tr.appendChild(moneyCell(prefix + "-tips-" + i));
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      target.appendChild(table);
+
+      var total = document.createElement("div");
+      total.className = "pool-total";
+      total.id = prefix + "-total";
+      target.appendChild(total);
+
+      Array.prototype.forEach.call(target.querySelectorAll("input"), function (input) {
+        input.addEventListener("input", function () { updatePoolTotal(prefix, rows.length); });
+      });
+      updatePoolTotal(prefix, rows.length);
+    }
+
+    function moneyCell(id) {
+      var td = document.createElement("td");
+      td.className = "money-cell";
+      var input = document.createElement("input");
+      input.type = "number";
+      input.step = "0.01";
+      input.min = "0";
+      input.inputMode = "decimal";
+      input.id = id;
+      input.placeholder = "0.00";
+      td.appendChild(input);
+      return td;
+    }
+
+    function updatePoolTotal(prefix, count) {
+      var tips = 0;
+      var cash = 0;
+      for (var i = 0; i < count; i++) {
+        tips += amountValue(prefix + "-tips-" + i);
+        cash += amountValue(prefix + "-cash-" + i);
+      }
+      var el = document.getElementById(prefix + "-total");
+      if (!el) return;
+      el.innerHTML = "Cash tips <b>$" + tips.toFixed(2) + "</b> &middot; cash transactions <b>$" +
+        cash.toFixed(2) + "</b> &middot; " + count + " server" + (count === 1 ? "" : "s");
+    }
+
+    function amountValue(id) {
+      var el = document.getElementById(id);
+      if (!el) return 0;
+      var n = parseFloat(String(el.value || "").replace(/,/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    // Pool rows for pasting into the Tin Plate template's B:E columns:
+    // Name, Hours, Cash transactions (Cash Sales), Cash tips.
+    function poolTSV(rows, prefix) {
+      return rows.map(function (row, i) {
+        return [
+          cleanCell(row["FIRST NAMES"]),
+          cleanCell(row["TOTAL HOURS"]),
+          cleanCell(amountField(prefix + "-cash-" + i)),
+          cleanCell(amountField(prefix + "-tips-" + i))
+        ].join("\t");
+      }).join("\n");
+    }
+
+    function amountField(id) {
+      var el = document.getElementById(id);
+      return el ? el.value : "";
+    }
+
+    // Compact two-column (Name / Hours) preview for the primary paste targets.
+    function renderNameHours(target, rows, nameKey, hoursKey) {
+      target.innerHTML = "";
+
+      if (!rows.length) {
+        target.innerHTML = '<p class="small">No one in this table.</p>';
+        return;
+      }
+
+      var table = document.createElement("table");
+      var thead = document.createElement("thead");
+      var trHead = document.createElement("tr");
+      ["Name", "Hours"].forEach(function (label, i) {
+        var th = document.createElement("th");
+        th.textContent = label;
+        if (i === 1) th.className = "num";
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+
+      var tbody = document.createElement("tbody");
+      rows.forEach(function (row) {
+        var tr = document.createElement("tr");
+        var nameTd = document.createElement("td");
+        nameTd.textContent = row[nameKey];
+        var hoursTd = document.createElement("td");
+        hoursTd.className = "num";
+        hoursTd.textContent = row[hoursKey];
+        tr.appendChild(nameTd);
+        tr.appendChild(hoursTd);
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      target.appendChild(table);
     }
 
     function renderTable(target, rows) {
@@ -964,214 +1157,11 @@
       if (type === "error") refs.status.classList.add("error");
     }
 
-    // ----------------------------------------------------------------------
-    // Excel export — builds an .xlsx that mirrors the master templates.
-    // ----------------------------------------------------------------------
-
-    // Renders the per-server Cash Sales / Cash Tips inputs for each pool and
-    // defaults the date to today.
-    function renderExportPanel(amRows, pmRows) {
-      if (!refs.expDate.value) {
-        var now = new Date();
-        var iso = now.getFullYear() + "-" +
-          String(now.getMonth() + 1).padStart(2, "0") + "-" +
-          String(now.getDate()).padStart(2, "0");
-        refs.expDate.value = iso;
-      }
-      renderCashInputs(refs.expAm, amRows, "am");
-      renderCashInputs(refs.expPm, pmRows, "pm");
-      refs.expStatus.classList.add("hidden");
-    }
-
-    function renderCashInputs(container, servers, prefix) {
-      container.innerHTML = "";
-
-      if (!servers.length) {
-        var none = document.createElement("p");
-        none.className = "small";
-        none.textContent = "No servers in this pool.";
-        container.appendChild(none);
-        return;
-      }
-
-      servers.forEach(function (server, index) {
-        var row = document.createElement("div");
-        row.className = "cash-row";
-
-        var name = document.createElement("span");
-        name.className = "cash-name";
-        name.textContent = server["FIRST NAMES"] + " (" + server["TOTAL HOURS"] + " h)";
-
-        var sales = document.createElement("input");
-        sales.type = "number"; sales.step = "0.01"; sales.min = "0";
-        sales.placeholder = "cash sales";
-        sales.id = prefix + "-sales-" + index;
-
-        var tips = document.createElement("input");
-        tips.type = "number"; tips.step = "0.01"; tips.min = "0";
-        tips.placeholder = "cash tips";
-        tips.id = prefix + "-tips-" + index;
-
-        row.appendChild(name);
-        row.appendChild(sales);
-        row.appendChild(tips);
-        container.appendChild(row);
-      });
-    }
-
-    function downloadWorkbook() {
-      if (typeof XLSX === "undefined") {
-        setExpStatus("The spreadsheet library didn't load (network may be blocked). Use the copy/paste tables instead.", true);
-        return;
-      }
-
-      var dateStr = formatDateMDY(refs.expDate.value);
-      var cash = numberOrZero(refs.exp3dCash.value);
-      var credit = numberOrZero(refs.exp3dCredit.value);
-
-      var split = latest.table2SplitIndex || 0;
-      var am = latest.table2.slice(0, split).map(function (s, i) { return readServer("am", i, s); });
-      var pm = latest.table2.slice(split).map(function (s, i) { return readServer("pm", i, s); });
-
-      var wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, build3DSheet(latest.table1, dateStr, cash, credit), "3D Tips");
-      XLSX.utils.book_append_sheet(wb, buildTinPlateSheet(am, pm, dateStr), "Tin Plate Cash");
-
-      var fname = "Tips_" + (refs.expDate.value || "day") + ".xlsx";
-      XLSX.writeFile(wb, fname);
-      setExpStatus("Downloaded " + fname + ".", false);
-    }
-
-    function readServer(prefix, index, server) {
-      return {
-        name: server["FIRST NAMES"],
-        hours: parseFloat(server["TOTAL HOURS"]) || 0,
-        cashSales: numberOrBlank(document.getElementById(prefix + "-sales-" + index).value),
-        cashTips: numberOrBlank(document.getElementById(prefix + "-tips-" + index).value)
-      };
-    }
-
-    // ----- worksheet builders (cell objects with live formulas) -----
-
-    // Cell markers: F("...") = formula, everything else is a literal value.
-    function F(formula) { return { __f: formula }; }
-
-    function makeCell(value) {
-      if (value && value.__f) return { t: "n", f: value.__f };
-      if (typeof value === "number") return { t: "n", v: value };
-      if (value === null || value === undefined || value === "") return null;
-      return { t: "s", v: String(value) };
-    }
-
-    function aoaToSheet(aoa) {
-      var ws = {};
-      var maxCol = 0;
-      for (var r = 0; r < aoa.length; r++) {
-        var rowArr = aoa[r] || [];
-        for (var c = 0; c < rowArr.length; c++) {
-          var cell = makeCell(rowArr[c]);
-          if (cell) ws[XLSX.utils.encode_cell({ r: r, c: c })] = cell;
-          if (c + 1 > maxCol) maxCol = c + 1;
-        }
-      }
-      ws["!ref"] = XLSX.utils.encode_range({
-        s: { r: 0, c: 0 },
-        e: { r: Math.max(aoa.length - 1, 0), c: Math.max(maxCol - 1, 0) }
-      });
-      return ws;
-    }
-
-    // 3D Tips: one daily table (BOH + 3D), one cash pool + one credit pool.
-    function build3DSheet(table1, dateStr, cash, credit) {
-      var n = table1.length;
-      var totalRow = 3 + n;          // Excel row of the Total: line
-      var perHourRow = totalRow + 1; // Cash/Credit Per Hour line
-      var lastPerson = 2 + n;        // Excel row of the last person
-
-      var aoa = [];
-      aoa.push(["Date:", "Name", "Hours Worked", "Cash Tips", "Take Home Amount", "Credit Tips", "Paycheck Amount"]);
-      // Pool row: date + cash (D2) + credit (F2); E2 computes off the blank C2.
-      aoa.push([dateStr, "", "", cash, F("$E$" + perHourRow + "*C2"), credit]);
-
-      for (var i = 0; i < n; i++) {
-        var er = 3 + i;
-        aoa.push([
-          "", table1[i]["NAMES"], parseFloat(table1[i]["TOTAL HOURS"]) || 0, "",
-          F("$E$" + perHourRow + "*C" + er), "",
-          F("($G$" + perHourRow + "*C" + er + ")+E" + er)
-        ]);
-      }
-
-      aoa.push(["Total:", "", F("SUM(C3:C" + lastPerson + ")"), F("D2"), "", F("F2")]);
-      aoa.push(["", "", "", "Cash Per Hour", F("D" + totalRow + "/C" + totalRow),
-        "Credit Per Hour", F("F" + totalRow + "/C" + totalRow)]);
-
-      return aoaToSheet(aoa);
-    }
-
-    // Tin Plate: AM block then PM block, each with per-server cash sales/tips.
-    function buildTinPlateSheet(amServers, pmServers, dateStr) {
-      var aoa = [];
-
-      function addBlock(label, servers) {
-        if (!servers.length) return;
-        var headerRow = aoa.length + 1; // 1-based Excel row of this header
-        var firstPerson = headerRow + 1;
-        var n = servers.length;
-        var totalRow = firstPerson + n; // Total: directly after the people
-
-        aoa.push([label, "Name", "Hours Worked", "Cash Sales", "Cash Tips", "Tip Percent", "Take Home Amount"]);
-
-        for (var i = 0; i < n; i++) {
-          var er = firstPerson + i;
-          var s = servers[i];
-          aoa.push([
-            dateStr, s.name, s.hours,
-            s.cashSales === "" ? "" : s.cashSales,
-            s.cashTips === "" ? "" : s.cashTips,
-            F("E" + er + "/D" + er),
-            F("H" + totalRow + "*C" + er)
-          ]);
-        }
-
-        var rng = function (col) { return "SUM(" + col + firstPerson + ":" + col + (totalRow - 1) + ")"; };
-        aoa.push([
-          "Total:", "", F(rng("C")), F(rng("D")), F(rng("E")),
-          F("E" + totalRow + "/D" + totalRow), "Per Hour:", F("E" + totalRow + "/C" + totalRow)
-        ]);
-      }
-
-      addBlock("Date: AM", amServers);
-      if (amServers.length && pmServers.length) aoa.push([]); // blank gap between blocks
-      addBlock("Date: PM", pmServers);
-
-      if (!aoa.length) aoa.push(["No FOH servers in this CSV."]);
-      return aoaToSheet(aoa);
-    }
-
-    function numberOrZero(value) {
-      var n = parseFloat(String(value || "").replace(/,/g, ""));
-      return Number.isFinite(n) ? n : 0;
-    }
-
-    function numberOrBlank(value) {
-      var raw = String(value == null ? "" : value).trim();
-      if (raw === "") return "";
-      var n = parseFloat(raw.replace(/,/g, ""));
-      return Number.isFinite(n) ? n : "";
-    }
-
-    // "2024-06-07" -> "6/7/2024" to match the templates' Date: cells.
-    function formatDateMDY(isoValue) {
-      var raw = String(isoValue || "").trim();
-      var m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!m) return raw;
-      return parseInt(m[2], 10) + "/" + parseInt(m[3], 10) + "/" + m[1];
-    }
-
-    function setExpStatus(message, isError) {
-      refs.expStatus.textContent = message;
-      refs.expStatus.className = "status " + (isError ? "error" : "good");
+    // Two-column TSV (e.g. Name + Hours) sized to a template's input columns.
+    function twoColumnTSV(rows, keyA, keyB) {
+      return rows.map(function (row) {
+        return cleanCell(row[keyA]) + "\t" + cleanCell(row[keyB]);
+      }).join("\n");
     }
 
     function parseCSV(text) {
