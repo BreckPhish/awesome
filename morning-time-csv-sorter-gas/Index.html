@@ -492,6 +492,8 @@
             "NAMES": item.name,
             "TOTAL HOURS": formatHours(item.hours),
             "JOB TITLE": Array.from(item.jobs).join(" / "),
+            "CLOCK IN": item.clockIn,
+            "CLOCK OUT": item.clockOut,
             "_is3D": item.is3D
           };
         })
@@ -503,7 +505,9 @@
           return {
             "NAMES": row["NAMES"],
             "TOTAL HOURS": row["TOTAL HOURS"],
-            "JOB TITLE": row["JOB TITLE"]
+            "JOB TITLE": row["JOB TITLE"],
+            "CLOCK IN": row["CLOCK IN"],
+            "CLOCK OUT": row["CLOCK OUT"]
           };
         });
 
@@ -550,15 +554,25 @@
       var key = name.toLowerCase();
       var hours = getHours(row);
       var job = cleanJobTitle(get(row, "Job"));
+      var timeIn = get(row, "Time In");
+      var timeOut = get(row, "Time Out");
+      var inMin = timeToMinutes(timeIn);
+      var outMin = timeToMinutes(timeOut);
 
       if (!map.has(key)) {
-        map.set(key, { name: name, hours: 0, jobs: new Set(), is3D: is3D });
+        map.set(key, {
+          name: name, hours: 0, jobs: new Set(), is3D: is3D,
+          inMin: Infinity, outMin: -Infinity, clockIn: "", clockOut: ""
+        });
       }
 
       var item = map.get(key);
       item.hours += hours;
       item.is3D = item.is3D || is3D;
       if (job) item.jobs.add(job);
+      // Display the day's earliest clock-in and latest clock-out for the person.
+      if (inMin !== 99999 && inMin < item.inMin) { item.inMin = inMin; item.clockIn = timeIn; }
+      if (outMin !== 99999 && outMin > item.outMin) { item.outMin = outMin; item.clockOut = timeOut; }
     }
 
     function addTable2Row(table2, row) {
@@ -723,7 +737,7 @@
 
       // Primary workflow: 3D = Name + Hours (with pool tip fields above);
       // each Tin Plate pool = an editable table for per-server cash entry.
-      renderNameHours(refs.t1NhView, processed.table1, "NAMES", "TOTAL HOURS");
+      renderThreeDee(refs.t1NhView, processed.table1);
       renderPoolInputs(refs.t2AmView, amRows, "am");
       renderPoolInputs(refs.t2PmView, pmRows, "pm");
 
@@ -896,8 +910,9 @@
       return el ? el.value : "";
     }
 
-    // Compact two-column (Name / Hours) preview for the primary paste targets.
-    function renderNameHours(target, rows, nameKey, hoursKey) {
+    // 3D Tips preview: Name + Hours plus clock-in/out and job for reference.
+    // The "Copy Name + Hours" button still copies only Name + Hours.
+    function renderThreeDee(target, rows) {
       target.innerHTML = "";
 
       if (!rows.length) {
@@ -905,13 +920,21 @@
         return;
       }
 
+      var cols = [
+        { key: "NAMES", label: "Name" },
+        { key: "TOTAL HOURS", label: "Hours", num: true },
+        { key: "CLOCK IN", label: "Clock In" },
+        { key: "CLOCK OUT", label: "Clock Out" },
+        { key: "JOB TITLE", label: "Job" }
+      ];
+
       var table = document.createElement("table");
       var thead = document.createElement("thead");
       var trHead = document.createElement("tr");
-      ["Name", "Hours"].forEach(function (label, i) {
+      cols.forEach(function (c) {
         var th = document.createElement("th");
-        th.textContent = label;
-        if (i === 1) th.className = "num";
+        th.textContent = c.label;
+        if (c.num) th.className = "num";
         trHead.appendChild(th);
       });
       thead.appendChild(trHead);
@@ -919,13 +942,12 @@
       var tbody = document.createElement("tbody");
       rows.forEach(function (row) {
         var tr = document.createElement("tr");
-        var nameTd = document.createElement("td");
-        nameTd.textContent = row[nameKey];
-        var hoursTd = document.createElement("td");
-        hoursTd.className = "num";
-        hoursTd.textContent = row[hoursKey];
-        tr.appendChild(nameTd);
-        tr.appendChild(hoursTd);
+        cols.forEach(function (c) {
+          var td = document.createElement("td");
+          td.textContent = row[c.key];
+          if (c.num) td.className = "num";
+          tr.appendChild(td);
+        });
         tbody.appendChild(tr);
       });
 
