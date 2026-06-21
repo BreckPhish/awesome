@@ -362,6 +362,19 @@ function buildRows() {
     await a.present();
   });
 
+  addActionRow("💬  Send to WhatsApp", Color.green(), async () => {
+    const report = buildReport(compute());
+
+    // Copy first so the text is always available to paste as a fallback.
+    Pasteboard.copy(report);
+
+    // WhatsApp's URL scheme can pre-fill the message text but cannot target a
+    // specific group by name. This opens WhatsApp with the report ready to go;
+    // pick the "Dough Count" group in the chat picker and tap send.
+    const url = "whatsapp://send?text=" + encodeURIComponent(report);
+    Safari.open(url);
+  });
+
   addActionRow("Reset all to 0", Color.red(), async () => {
     const ok = await confirm("Reset?", "Set every count back to 0.");
 
