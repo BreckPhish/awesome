@@ -568,12 +568,12 @@
       var value = payable !== "" ? payable : total;
       var parsed = parseFloat(String(value || "0").replace(/,/g, ""));
 
-      return isFinite(parsed) ? parsed : 0;
+      return Number.isFinite(parsed) ? parsed : 0;
     }
 
     function formatHours(value) {
       var n = Number(value);
-      return isFinite(n) ? n.toFixed(2) : "0.00";
+      return Number.isFinite(n) ? n.toFixed(2) : "0.00";
     }
 
     function timeToMinutes(value) {
@@ -586,7 +586,7 @@
       var minute = parseInt(match[2], 10);
       var ampm = match[3].toUpperCase();
 
-      if (!isFinite(hour) || !isFinite(minute)) return 99999;
+      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return 99999;
 
       if (ampm === "PM" && hour !== 12) hour += 12;
       if (ampm === "AM" && hour === 12) hour = 0;
@@ -688,7 +688,7 @@
     function sumColumn(rows, key) {
       return rows.reduce(function (sum, row) {
         var n = parseFloat(String(row[key] || "0").replace(/,/g, ""));
-        return sum + (isFinite(n) ? n : 0);
+        return sum + (Number.isFinite(n) ? n : 0);
       }, 0);
     }
 

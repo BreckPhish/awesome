@@ -15,8 +15,11 @@
  */
 
 function doGet() {
+  // SAMEORIGIN (not ALLOWALL) so the app cannot be framed by external sites,
+  // which avoids clickjacking. Switch to ALLOWALL only if you must embed this
+  // in another domain (e.g. a Google Site on a different origin).
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Morning Time CSV Sorter')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.SAMEORIGIN);
 }
