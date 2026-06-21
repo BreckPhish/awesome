@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top" />
+  <meta charset="utf-8" />
+  <!-- SheetJS: builds the downloadable .xlsx that mirrors the master templates. -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7f8;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #d8dce0;
+      --accent: #1f6feb;
+      --warn: #8a5a00;
+      --bad: #9b1c1c;
+      --good: #126b39;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.35;
+    }
+
+    .app { max-width: 1160px; margin: 0 auto; }
+
+    .header h1 { margin: 0 0 6px; font-size: 26px; }
+    .header p, .small, details ul { color: var(--muted); font-size: 13px; }
+
+    h2 { margin: 0 0 12px; font-size: 19px; }
+    h3 { margin: 14px 0 10px; font-size: 16px; }
+    p { margin: 6px 0; }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 14px 0;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    .upload-panel { display: grid; gap: 10px; }
+
+    #csv-input {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: #fafafa;
+    }
+
+    .status {
+      padding: 10px 12px;
+      background: #eef5ff;
+      border: 1px solid #c9ddff;
+      border-radius: 10px;
+      color: #174ea6;
+      font-size: 14px;
+    }
+
+    .warning { background: #fff8e1; border-color: #f2cf73; color: var(--warn); }
+    .error { background: #fdecec; border-color: #efb8b8; color: var(--bad); }
+    .good { background: #eaf7ef; border-color: #b7e0c8; color: var(--good); }
+
+    .results-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+
+    @media (min-width: 900px) {
+      .results-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+
+    .export-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 8px 0 4px; }
+    .export-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+    .export-grid input { padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+    .cash-inputs { display: grid; gap: 6px; margin: 6px 0 4px; }
+    .cash-row { display: grid; grid-template-columns: 1fr 120px 120px; gap: 8px; align-items: center; }
+    .cash-row .cash-name { font-size: 13px; }
+    .cash-row input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+    @media (max-width: 560px) { .cash-row { grid-template-columns: 1fr; } }
+
+    .col-copy { margin: 2px 0 10px; }
+    .col-copy-label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 2px; }
+    .col-buttons { margin: 4px 0 0; }
+    button.col-btn { font-size: 12px; padding: 6px 9px; }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: white;
+      padding: 8px 11px;
+      border-radius: 8px;
+      font-weight: 650;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.secondary { background: white; color: var(--accent); }
+
+    table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 7px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #f1f3f4; font-weight: 750; }
+
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    tr.gap-row td {
+      background: #fff4d6;
+      color: var(--warn);
+      font-weight: 750;
+      text-align: center;
+      letter-spacing: 0.03em;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 10px;
+      background: #fbfbfb;
+    }
+
+    .qa-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+
+    .qa-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fbfbfb; }
+
+    .qa-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .qa-value { margin-top: 4px; font-size: 20px; font-weight: 750; font-variant-numeric: tabular-nums; }
+    .qa-message { margin-top: 12px; }
+
+    details summary { cursor: pointer; font-weight: 700; }
+
+    code { background: #eef0f2; padding: 1px 4px; border-radius: 4px; }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1>Morning Time CSV Sorter</h1>
+      <p>Upload the day&rsquo;s time-entry CSV. The tool creates two copy-ready tables for your master spreadsheets.</p>
+    </header>
+
+    <section class="panel upload-panel">
+      <h2>1. Upload daily CSV</h2>
+      <input id="csv-input" type="file" accept=".csv,text/csv" />
+      <div id="status" class="status">No CSV loaded yet.</div>
+      <details>
+        <summary>Sorting rules</summary>
+        <ul>
+          <li><strong>Table 1:</strong> Bussers, Dishwashers, Prep Cooks, Cooks, and all Three Daughters employees.</li>
+          <li><strong>Three Daughters detection:</strong> employee name contains <code>Three Daughters</code>, job contains <code>3D</code>, or location contains <code>Three Daughters</code>.</li>
+          <li><strong>Table 1 names:</strong> first names only; Three Daughters rows get <code> 3D</code> after the name and sort first.</li>
+          <li><strong>Table 1 hours:</strong> combined by displayed first name.</li>
+          <li><strong>Table 2:</strong> Servers, Bartenders, Bar Lead, and Trainer. Trainee is excluded.</li>
+          <li><strong>Table 2 layout:</strong> not combined; sorted by clock-in time and labeled as two independent FOH cash tip pools &mdash; the <strong>AM tip pool</strong> (clock-in before <code>2:00 PM</code>) and the <strong>PM tip pool</strong> (clock-in 2:00 PM &amp; after). Column 5 shows each row&rsquo;s job title.</li>
+          <li><strong>Always excluded:</strong> Online ordering profiles, Toast default profiles, Hosts, Managers (including Hourly Shift Manager), and Chefs never appear in Table 1, Table 2, or unmatched rows.</li>
+          <li><strong>Column copy:</strong> each table has a button per column to copy just that column&rsquo;s values. Table 2&rsquo;s column buttons are split into the AM tip pool (before 2 PM) and PM tip pool (2 PM &amp; after) so each column copies separately per pool.</li>
+          <li><strong>Hours source:</strong> uses <code>Payable Hours</code> first, then falls back to <code>Total Hours</code>.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="qa-panel" class="panel hidden">
+      <h2>2. QA totals</h2>
+      <div class="qa-grid">
+        <div class="qa-card"><div class="qa-label">Source rows</div><div id="qa-source-rows" class="qa-value">0</div></div>
+        <div class="qa-card"><div class="qa-label">Source payable hours</div><div id="qa-source-hours" class="qa-value">0.00</div></div>
+        <div class="qa-card"><div class="qa-label">Table 1 hours</div><div id="qa-table1-hours" class="qa-value">0.00</div></div>
+        <div class="qa-card"><div class="qa-label">Table 2 hours</div><div id="qa-table2-hours" class="qa-value">0.00</div></div>
+        <div class="qa-card"><div class="qa-label">Unmatched hours</div><div id="qa-unmatched-hours" class="qa-value">0.00</div></div>
+        <div class="qa-card"><div class="qa-label">Excluded hours</div><div id="qa-excluded-hours" class="qa-value">0.00</div></div>
+        <div class="qa-card"><div class="qa-label">Check total</div><div id="qa-check-total" class="qa-value">0.00</div></div>
+      </div>
+      <div id="qa-message" class="status good qa-message">Ready.</div>
+    </section>
+
+    <section id="results-panel" class="results-grid hidden">
+      <div class="panel">
+        <h2>Table 1 &mdash; BOH / bussers / 3D</h2>
+        <div class="button-row">
+          <button id="copy-t1-rows" type="button">Copy rows only</button>
+          <button id="copy-t1-headers" type="button" class="secondary">Copy with headers</button>
+        </div>
+        <div class="col-copy">
+          <span class="col-copy-label">Copy a single column (values only, top to bottom):</span>
+          <div id="table1-cols" class="button-row col-buttons"></div>
+        </div>
+        <div id="table1-view"></div>
+        <h3>Paste-ready TSV</h3>
+        <textarea id="table1-tsv" readonly></textarea>
+      </div>
+
+      <div class="panel">
+        <h2>Table 2 &mdash; FOH cash tip pools</h2>
+        <p class="small">Split into the <strong>AM tip pool</strong> (clock-in before 2 PM) and <strong>PM tip pool</strong> (clock-in 2 PM &amp; after). The two pools are independent &mdash; copy each into its own table.</p>
+        <div class="button-row">
+          <button id="copy-t2-am" type="button">Copy AM tip pool</button>
+          <button id="copy-t2-pm" type="button">Copy PM tip pool</button>
+          <button id="copy-t2-headers" type="button" class="secondary">Copy both with headers</button>
+        </div>
+        <div class="col-copy">
+          <span class="col-copy-label">AM tip pool &mdash; copy a single column (clock-in before 2 PM):</span>
+          <div id="table2-cols-lunch" class="button-row col-buttons"></div>
+          <span class="col-copy-label">PM tip pool &mdash; copy a single column (clock-in 2 PM &amp; after):</span>
+          <div id="table2-cols-dinner" class="button-row col-buttons"></div>
+        </div>
+        <div id="table2-view"></div>
+        <h3>Paste-ready TSV</h3>
+        <textarea id="table2-tsv" readonly></textarea>
+      </div>
+    </section>
+
+    <section id="excel-panel" class="panel hidden">
+      <h2>3. Build Excel sheets</h2>
+      <p class="small">Enter the day&rsquo;s tip amounts, then download an <code>.xlsx</code> laid out like your master templates &mdash; the formulas (Take Home, Paycheck, Tip Percent, per-hour) are built in, so it computes exactly as if you&rsquo;d filled the template by hand.</p>
+      <div class="export-grid">
+        <label>Date<input id="exp-date" type="date" /></label>
+        <label>3D Cash Tips ($)<input id="exp-3d-cash" type="number" step="0.01" min="0" placeholder="0.00" /></label>
+        <label>3D Credit Tips ($)<input id="exp-3d-credit" type="number" step="0.01" min="0" placeholder="0.00" /></label>
+      </div>
+      <h3>Tin Plate &mdash; AM servers</h3>
+      <p class="small">Enter each server&rsquo;s cash sales and cash tips (from the cash count). Leave a pool blank to skip its table.</p>
+      <div id="exp-am" class="cash-inputs"></div>
+      <h3>Tin Plate &mdash; PM servers</h3>
+      <div id="exp-pm" class="cash-inputs"></div>
+      <div class="button-row">
+        <button id="download-xlsx" type="button">Download Excel workbook</button>
+      </div>
+      <div id="exp-status" class="status good hidden"></div>
+    </section>
+
+    <section id="unmatched-panel" class="panel hidden">
+      <h2>Unmatched rows</h2>
+      <p class="small">Rows that did not meet Table 1 or Table 2 rules. Excluded profiles are removed before this section.</p>
+      <div class="button-row">
+        <button id="copy-unmatched" type="button" class="secondary">Copy unmatched with headers</button>
+      </div>
+      <div id="unmatched-view"></div>
+      <textarea id="unmatched-tsv" readonly></textarea>
+    </section>
+
+    <section id="excluded-panel" class="panel hidden">
+      <h2>Excluded rows</h2>
+      <p class="small">Online ordering, Toast default, Host, Manager, and Chef rows are shown only for QA and are not included in either copy/paste table.</p>
+      <div id="excluded-view"></div>
+    </section>
+  </main>
+
+  <script>
+    // ----- 2 PM cutoff used to split Table 2 -----------------------------------
+    var TWO_PM_MINUTES = 14 * 60;
+
+    var latest = emptyResults();
+    var refs = {};
+
+    document.addEventListener("DOMContentLoaded", function () {
+      refs = {
+        status: document.getElementById("status"),
+        input: document.getElementById("csv-input"),
+        qaPanel: document.getElementById("qa-panel"),
+        resultsPanel: document.getElementById("results-panel"),
+        unmatchedPanel: document.getElementById("unmatched-panel"),
+        excludedPanel: document.getElementById("excluded-panel"),
+        excelPanel: document.getElementById("excel-panel"),
+        expDate: document.getElementById("exp-date"),
+        exp3dCash: document.getElementById("exp-3d-cash"),
+        exp3dCredit: document.getElementById("exp-3d-credit"),
+        expAm: document.getElementById("exp-am"),
+        expPm: document.getElementById("exp-pm"),
+        expStatus: document.getElementById("exp-status"),
+        qaMessage: document.getElementById("qa-message"),
+        table1View: document.getElementById("table1-view"),
+        table2View: document.getElementById("table2-view"),
+        table1Cols: document.getElementById("table1-cols"),
+        table2ColsLunch: document.getElementById("table2-cols-lunch"),
+        table2ColsDinner: document.getElementById("table2-cols-dinner"),
+        unmatchedView: document.getElementById("unmatched-view"),
+        excludedView: document.getElementById("excluded-view"),
+        table1TSV: document.getElementById("table1-tsv"),
+        table2TSV: document.getElementById("table2-tsv"),
+        unmatchedTSV: document.getElementById("unmatched-tsv")
+      };
+
+      refs.input.addEventListener("change", handleFileInput);
+
+      document.getElementById("copy-t1-rows").addEventListener("click", function () {
+        copyText(toTSV(latest.table1, false), "Table 1 rows copied.");
+      });
+      document.getElementById("copy-t1-headers").addEventListener("click", function () {
+        copyText(toTSV(latest.table1, true), "Table 1 with headers copied.");
+      });
+      document.getElementById("copy-t2-am").addEventListener("click", function () {
+        var split = latest.table2SplitIndex || 0;
+        copyText(toTSV(latest.table2.slice(0, split), false), "AM tip pool rows copied.");
+      });
+      document.getElementById("copy-t2-pm").addEventListener("click", function () {
+        var split = latest.table2SplitIndex || 0;
+        copyText(toTSV(latest.table2.slice(split), false), "PM tip pool rows copied.");
+      });
+      document.getElementById("copy-t2-headers").addEventListener("click", function () {
+        copyText(toTSV2(latest.table2, latest.table2SplitIndex, true), "Both tip pools with headers copied.");
+      });
+      document.getElementById("copy-unmatched").addEventListener("click", function () {
+        copyText(toTSV(latest.unmatched, true), "Unmatched rows copied.");
+      });
+      document.getElementById("download-xlsx").addEventListener("click", downloadWorkbook);
+    });
+
+    function emptyResults() {
+      return {
+        table1: [],
+        table2: [],
+        table2SplitIndex: 0,
+        unmatched: [],
+        excluded: [],
+        sourceHours: 0,
+        excludedHours: 0,
+        sourceRows: 0
+      };
+    }
+
+    function handleFileInput(event) {
+      var file = event.target.files && event.target.files[0];
+
+      if (!file) {
+        setStatus("No file selected.", "warning");
+        return;
+      }
+
+      setStatus("Reading CSV...", "status");
+
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        processCSV(String(e.target.result || ""));
+      };
+      reader.onerror = function () {
+        setStatus("Could not read the uploaded file. Export it as a standard CSV and try again.", "error");
+      };
+      reader.readAsText(file);
+    }
+
+    function processCSV(text) {
+      try {
+        latest = emptyResults();
+
+        var rows = parseCSV(text);
+        if (rows.length < 2) throw new Error("The CSV has no data rows.");
+
+        var headers = rows[0].map(cleanHeader);
+        validateRequiredColumns(headers);
+
+        var body = rows.slice(1)
+          .filter(function (row) {
+            return row.some(function (cell) {
+              return String(cell || "").trim() !== "";
+            });
+          })
+          .map(function (row) {
+            return rowObject(headers, row);
+          });
+
+        latest = buildTables(body);
+        renderAll(latest, body.length);
+
+        setStatus("Loaded " + body.length + " rows. Tables are ready to copy.", "good");
+      } catch (err) {
+        console.error(err);
+        hideResults();
+        setStatus(err.message || "Could not process CSV.", "error");
+      }
+    }
+
+    function validateRequiredColumns(headers) {
+      var required = ["Employee", "Job", "Time In", "Time Out"];
+      var missing = required.filter(function (header) {
+        return headers.indexOf(header) === -1;
+      });
+
+      var hasHours = headers.indexOf("Payable Hours") !== -1 || headers.indexOf("Total Hours") !== -1;
+
+      if (missing.length) {
+        throw new Error("Missing required column(s): " + missing.join(", "));
+      }
+      if (!hasHours) {
+        throw new Error("Missing required hours column: Payable Hours or Total Hours.");
+      }
+    }
+
+    function buildTables(rows) {
+      var table1Map = new Map();
+      var table2 = [];
+      var unmatched = [];
+      var excluded = [];
+      var excludedHours = 0;
+
+      rows.forEach(function (row) {
+        if (isAlwaysExcluded(row)) {
+          var hours = getHours(row);
+          excludedHours += hours;
+          excluded.push({
+            "Employee": get(row, "Employee"),
+            "Job": get(row, "Job"),
+            "Payable Hours": formatHours(hours),
+            "Clock In": get(row, "Time In"),
+            "Clock Out": get(row, "Time Out")
+          });
+          return;
+        }
+
+        var inTable1 = includeTable1(row);
+        var inTable2 = includeTable2(row);
+
+        if (inTable1) addTable1Row(table1Map, row);
+        if (inTable2) addTable2Row(table2, row);
+
+        if (!inTable1 && !inTable2) {
+          unmatched.push({
+            "Employee": get(row, "Employee"),
+            "Job": get(row, "Job"),
+            "Payable Hours": formatHours(getHours(row)),
+            "Clock In": get(row, "Time In"),
+            "Clock Out": get(row, "Time Out")
+          });
+        }
+      });
+
+      var table1 = Array.from(table1Map.values())
+        .map(function (item) {
+          return {
+            "NAMES": item.name,
+            "TOTAL HOURS": formatHours(item.hours),
+            "JOB TITLE": Array.from(item.jobs).join(" / "),
+            "_is3D": item.is3D
+          };
+        })
+        .sort(function (a, b) {
+          if (a._is3D !== b._is3D) return a._is3D ? -1 : 1;
+          return a["NAMES"].localeCompare(b["NAMES"]);
+        })
+        .map(function (row) {
+          return {
+            "NAMES": row["NAMES"],
+            "TOTAL HOURS": row["TOTAL HOURS"],
+            "JOB TITLE": row["JOB TITLE"]
+          };
+        });
+
+      table2.sort(function (a, b) {
+        return a._sort - b._sort;
+      });
+
+      // Everyone who clocked in before 2:00 PM sorts above the gap; everyone
+      // at or after 2:00 PM (and any unparseable times) falls below it.
+      var splitIndex = table2.filter(function (row) {
+        return row._sort < TWO_PM_MINUTES;
+      }).length;
+
+      var visibleTable2 = table2.map(function (row) {
+        return {
+          "FIRST NAMES": row["FIRST NAMES"],
+          "TOTAL HOURS": row["TOTAL HOURS"],
+          "CLOCK IN TIME": row["CLOCK IN TIME"],
+          "CLOCK OUT TIME": row["CLOCK OUT TIME"],
+          "JOB TITLE": row["JOB TITLE"]
+        };
+      });
+
+      var sourceHours = rows.reduce(function (sum, row) {
+        return sum + getHours(row);
+      }, 0);
+
+      return {
+        table1: table1,
+        table2: visibleTable2,
+        table2SplitIndex: splitIndex,
+        unmatched: unmatched,
+        excluded: excluded,
+        sourceHours: sourceHours,
+        excludedHours: excludedHours,
+        sourceRows: rows.length
+      };
+    }
+
+    function addTable1Row(map, row) {
+      var is3D = isThreeDaughters(row);
+      var first = firstName(get(row, "Employee"));
+      var name = first + (is3D && !/\s3D$/i.test(first) ? " 3D" : "");
+      var key = name.toLowerCase();
+      var hours = getHours(row);
+      var job = cleanJobTitle(get(row, "Job"));
+
+      if (!map.has(key)) {
+        map.set(key, { name: name, hours: 0, jobs: new Set(), is3D: is3D });
+      }
+
+      var item = map.get(key);
+      item.hours += hours;
+      item.is3D = item.is3D || is3D;
+      if (job) item.jobs.add(job);
+    }
+
+    function addTable2Row(table2, row) {
+      table2.push({
+        "FIRST NAMES": firstName(get(row, "Employee")),
+        "TOTAL HOURS": formatHours(getHours(row)),
+        "CLOCK IN TIME": get(row, "Time In"),
+        "CLOCK OUT TIME": get(row, "Time Out"),
+        "JOB TITLE": cleanJobTitle(get(row, "Job")),
+        "_sort": timeToMinutes(get(row, "Time In"))
+      });
+    }
+
+    // Profiles that should never reach any table: online ordering, Toast
+    // default profiles, hosts, managers (incl. hourly shift manager), chefs.
+    function isAlwaysExcluded(row) {
+      var job = get(row, "Job");
+      var employee = get(row, "Employee");
+      var hay = job + " " + employee;
+
+      return /online\s*order(ing)?/i.test(hay)
+        || /toast\s*default/i.test(hay)
+        || /\bdefault\b/i.test(job)
+        || /\bhost(ess)?\b/i.test(job)
+        || /\bmanager\b/i.test(job)
+        || /\bchef\b/i.test(job);
+    }
+
+    function includeTable1(row) {
+      var job = get(row, "Job");
+
+      return isThreeDaughters(row)
+        || /\bbusser\b/i.test(job)
+        || /\bdishwasher\b/i.test(job)
+        || /\bprep\s*cook\b/i.test(job)
+        || /\bcook\b/i.test(job);
+    }
+
+    function includeTable2(row) {
+      var job = get(row, "Job");
+
+      if (/\btrainee\b/i.test(job)) return false;
+
+      return /\bserver\b/i.test(job)
+        || /\bbartender\b/i.test(job)
+        || /\bbar\s*lead\b/i.test(job)
+        || /\btrainer\b/i.test(job);
+    }
+
+    function isThreeDaughters(row) {
+      return /three daughters/i.test(get(row, "Employee"))
+        || /\b3d\b/i.test(get(row, "Job"))
+        || /three daughters/i.test(get(row, "Location"));
+    }
+
+    function firstName(employee) {
+      var raw = String(employee || "").trim();
+      if (!raw) return "";
+
+      if (/three daughters/i.test(raw)) return "Three Daughters";
+
+      if (raw.indexOf(",") !== -1) {
+        var afterComma = raw.split(",").slice(1).join(",").trim();
+        return titleCase((afterComma.split(/\s+/)[0] || "").trim());
+      }
+
+      return titleCase((raw.split(/\s+/)[0] || "").trim());
+    }
+
+    function cleanJobTitle(job) {
+      var raw = String(job || "").trim();
+      if (!raw) return "";
+
+      var noDept = raw.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+
+      if (/\bbusser\b/i.test(noDept)) return "Busser";
+      if (/\bdishwasher\b/i.test(noDept)) return "Dishwasher";
+      if (/\bprep\s*cook\b/i.test(noDept)) return "Prep Cook";
+      if (/\b3d\s*cook\b/i.test(noDept)) return "3D Cook";
+      if (/\bcook\b/i.test(noDept)) return "Cook";
+      if (/\bbartender\b/i.test(noDept)) return "Bartender";
+      if (/\bbar\s*lead\b/i.test(noDept)) return "Bar Lead";
+      if (/\bserver\b/i.test(noDept)) return "Server";
+      if (/\btrainer\b/i.test(noDept)) return "Trainer";
+
+      return titleCase(noDept);
+    }
+
+    function getHours(row) {
+      var payable = get(row, "Payable Hours");
+      var total = get(row, "Total Hours");
+      var value = payable !== "" ? payable : total;
+      var parsed = parseFloat(String(value || "0").replace(/,/g, ""));
+
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function formatHours(value) {
+      var n = Number(value);
+      return Number.isFinite(n) ? n.toFixed(2) : "0.00";
+    }
+
+    function timeToMinutes(value) {
+      var raw = String(value || "").trim();
+      var match = raw.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i);
+
+      if (!match) return 99999;
+
+      var hour = parseInt(match[1], 10);
+      var minute = parseInt(match[2], 10);
+      var ampm = match[3].toUpperCase();
+
+      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return 99999;
+
+      if (ampm === "PM" && hour !== 12) hour += 12;
+      if (ampm === "AM" && hour === 12) hour = 0;
+
+      return hour * 60 + minute;
+    }
+
+    function titleCase(value) {
+      return String(value || "")
+        .toLowerCase()
+        .split(/([\s-]+)/)
+        .map(function (part) {
+          return /^[a-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part;
+        })
+        .join("");
+    }
+
+    function cleanHeader(header) {
+      return String(header || "").replace(/^﻿/, "").trim();
+    }
+
+    function rowObject(headers, values) {
+      var obj = {};
+      headers.forEach(function (header, index) {
+        obj[header] = String(values[index] === undefined ? "" : values[index]).trim();
+      });
+      return obj;
+    }
+
+    function get(row, key) {
+      if (row[key] !== undefined) return row[key];
+
+      var found = Object.keys(row).find(function (k) {
+        return k.toLowerCase() === key.toLowerCase();
+      });
+
+      return found ? row[found] : "";
+    }
+
+    function renderAll(processed, sourceRowCount) {
+      refs.qaPanel.classList.remove("hidden");
+      refs.resultsPanel.classList.remove("hidden");
+      refs.excelPanel.classList.remove("hidden");
+      refs.unmatchedPanel.classList.remove("hidden");
+      refs.excludedPanel.classList.remove("hidden");
+
+      renderTable(refs.table1View, processed.table1);
+      renderTable2(refs.table2View, processed.table2, processed.table2SplitIndex);
+      renderTable(refs.unmatchedView, processed.unmatched);
+      renderTable(refs.excludedView, processed.excluded);
+
+      // Per-column copy buttons. Table 2's columns are split by the 2 PM gap
+      // into the AM tip pool (before 2 PM) and PM tip pool (2 PM & after).
+      var t1Headers = processed.table1.length ? Object.keys(processed.table1[0]) : [];
+      var t2Headers = processed.table2.length ? Object.keys(processed.table2[0]) : [];
+      var amRows = processed.table2.slice(0, processed.table2SplitIndex);
+      var pmRows = processed.table2.slice(processed.table2SplitIndex);
+
+      buildColumnCopyButtons(refs.table1Cols, processed.table1, t1Headers, "");
+      buildColumnCopyButtons(refs.table2ColsLunch, amRows, t2Headers, "AM tip pool");
+      buildColumnCopyButtons(refs.table2ColsDinner, pmRows, t2Headers, "PM tip pool");
+
+      renderExportPanel(amRows, pmRows);
+
+      refs.table1TSV.value = toTSV(processed.table1, false);
+      refs.table2TSV.value = toTSV2(processed.table2, processed.table2SplitIndex, false);
+      refs.unmatchedTSV.value = toTSV(processed.unmatched, true);
+
+      var sourceHours = Number(processed.sourceHours || 0);
+      var table1Hours = sumColumn(processed.table1, "TOTAL HOURS");
+      var table2Hours = sumColumn(processed.table2, "TOTAL HOURS");
+      var unmatchedHours = sumColumn(processed.unmatched, "Payable Hours");
+      var excludedHours = Number(processed.excludedHours || 0);
+      var checkTotal = table1Hours + table2Hours + unmatchedHours + excludedHours;
+
+      document.getElementById("qa-source-rows").textContent = String(sourceRowCount);
+      document.getElementById("qa-source-hours").textContent = formatHours(sourceHours);
+      document.getElementById("qa-table1-hours").textContent = formatHours(table1Hours);
+      document.getElementById("qa-table2-hours").textContent = formatHours(table2Hours);
+      document.getElementById("qa-unmatched-hours").textContent = formatHours(unmatchedHours);
+      document.getElementById("qa-excluded-hours").textContent = formatHours(excludedHours);
+      document.getElementById("qa-check-total").textContent = formatHours(checkTotal);
+
+      var delta = Math.abs(sourceHours - checkTotal);
+      if (delta < 0.01) {
+        refs.qaMessage.className = "status good qa-message";
+        refs.qaMessage.textContent = "QA passed: Table 1 + Table 2 + Unmatched + Excluded equals source payable hours.";
+      } else {
+        refs.qaMessage.className = "status warning qa-message";
+        refs.qaMessage.textContent = "QA warning: totals differ by " + formatHours(delta) + " hours. Review CSV columns, unmatched rows, and excluded rows.";
+      }
+    }
+
+    function hideResults() {
+      if (!refs.qaPanel) return;
+      refs.qaPanel.classList.add("hidden");
+      refs.resultsPanel.classList.add("hidden");
+      refs.excelPanel.classList.add("hidden");
+      refs.unmatchedPanel.classList.add("hidden");
+      refs.excludedPanel.classList.add("hidden");
+    }
+
+    function sumColumn(rows, key) {
+      return rows.reduce(function (sum, row) {
+        var n = parseFloat(String(row[key] || "0").replace(/,/g, ""));
+        return sum + (Number.isFinite(n) ? n : 0);
+      }, 0);
+    }
+
+    function renderTable(target, rows) {
+      target.innerHTML = "";
+
+      if (!rows.length) {
+        target.innerHTML = '<p class="small">No rows.</p>';
+        return;
+      }
+
+      var headers = Object.keys(rows[0]);
+      var table = document.createElement("table");
+      var thead = document.createElement("thead");
+      var tbody = document.createElement("tbody");
+      var trHead = document.createElement("tr");
+
+      headers.forEach(function (header) {
+        var th = document.createElement("th");
+        th.textContent = header;
+        if (/hours/i.test(header)) th.className = "num";
+        trHead.appendChild(th);
+      });
+
+      thead.appendChild(trHead);
+
+      rows.forEach(function (row) {
+        var tr = document.createElement("tr");
+        headers.forEach(function (header) {
+          var td = document.createElement("td");
+          td.textContent = row[header];
+          if (/hours/i.test(header)) td.className = "num";
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      target.appendChild(table);
+    }
+
+    // Same as renderTable, but labels the AM tip pool (before 2 PM) and the
+    // PM tip pool (2 PM & after) as separate banner rows at the split.
+    function renderTable2(target, rows, splitIndex) {
+      target.innerHTML = "";
+
+      if (!rows.length) {
+        target.innerHTML = '<p class="small">No rows.</p>';
+        return;
+      }
+
+      var headers = Object.keys(rows[0]);
+
+      var table = document.createElement("table");
+      var thead = document.createElement("thead");
+      var tbody = document.createElement("tbody");
+      var trHead = document.createElement("tr");
+
+      headers.forEach(function (header) {
+        var th = document.createElement("th");
+        th.textContent = header;
+        if (/hours/i.test(header)) th.className = "num";
+        trHead.appendChild(th);
+      });
+
+      thead.appendChild(trHead);
+
+      function addPoolLabel(text) {
+        var tr = document.createElement("tr");
+        tr.className = "gap-row";
+        var td = document.createElement("td");
+        td.colSpan = headers.length;
+        td.textContent = text;
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+
+      rows.forEach(function (row, index) {
+        if (index === 0 && splitIndex > 0) {
+          addPoolLabel("AM TIP POOL — clock-in before 2:00 PM");
+        }
+        if (index === splitIndex && splitIndex < rows.length) {
+          addPoolLabel("PM TIP POOL — clock-in 2:00 PM & after");
+        }
+
+        var tr = document.createElement("tr");
+        headers.forEach(function (header) {
+          var td = document.createElement("td");
+          td.textContent = row[header];
+          if (/hours/i.test(header)) td.className = "num";
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      target.appendChild(table);
+    }
+
+    // Render one copy button per column. Each button copies that column's
+    // values top-to-bottom (newline-separated) so they paste into a single
+    // spreadsheet column. labelPrefix distinguishes Table 2's lunch/dinner sets.
+    function buildColumnCopyButtons(container, rows, headers, labelPrefix) {
+      container.innerHTML = "";
+
+      if (!headers || !headers.length) {
+        return;
+      }
+
+      if (!rows.length) {
+        var none = document.createElement("span");
+        none.className = "small";
+        none.textContent = "No rows.";
+        container.appendChild(none);
+        return;
+      }
+
+      headers.forEach(function (header) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary col-btn";
+        button.textContent = header;
+        button.addEventListener("click", function () {
+          var note = (labelPrefix ? labelPrefix + " " : "") + header +
+            " column copied (" + rows.length + " rows).";
+          copyText(columnList(rows, header), note);
+        });
+        container.appendChild(button);
+      });
+    }
+
+    function columnList(rows, key) {
+      return rows.map(function (row) {
+        return cleanCell(row[key]);
+      }).join("\n");
+    }
+
+    function toTSV(rows, includeHeaders) {
+      if (!rows.length) return "";
+
+      var headers = Object.keys(rows[0]);
+      var lines = [];
+
+      if (includeHeaders) lines.push(headers.join("\t"));
+
+      rows.forEach(function (row) {
+        lines.push(headers.map(function (header) {
+          return cleanCell(row[header]);
+        }).join("\t"));
+      });
+
+      return lines.join("\n");
+    }
+
+    // Table 2 TSV: inserts a blank gap row at the 2:00 PM split so the pasted
+    // block keeps the same before/after separation as the on-screen table.
+    function toTSV2(rows, splitIndex, includeHeaders) {
+      if (!rows.length) return "";
+
+      var headers = Object.keys(rows[0]);
+      var showGap = splitIndex > 0 && splitIndex < rows.length;
+      var lines = [];
+
+      if (includeHeaders) lines.push(headers.join("\t"));
+
+      rows.forEach(function (row, index) {
+        if (showGap && index === splitIndex) lines.push("");
+        lines.push(headers.map(function (header) {
+          return cleanCell(row[header]);
+        }).join("\t"));
+      });
+
+      return lines.join("\n");
+    }
+
+    function cleanCell(value) {
+      return String(value === undefined || value === null ? "" : value)
+        .replace(/\t/g, " ")
+        .replace(/\r?\n/g, " ");
+    }
+
+    function copyText(text, message) {
+      if (!text) {
+        setStatus("Nothing to copy.", "warning");
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          setStatus(message, "good");
+        }).catch(function () {
+          fallbackCopy(text);
+          setStatus(message, "good");
+        });
+      } else {
+        fallbackCopy(text);
+        setStatus(message, "good");
+      }
+    }
+
+    function fallbackCopy(text) {
+      var temp = document.createElement("textarea");
+      temp.value = text;
+      temp.style.position = "fixed";
+      temp.style.left = "-9999px";
+      temp.style.top = "0";
+      document.body.appendChild(temp);
+      temp.focus();
+      temp.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(temp);
+    }
+
+    function setStatus(message, type) {
+      if (!refs.status) return;
+
+      refs.status.textContent = message;
+      refs.status.className = "status";
+
+      if (type === "good") refs.status.classList.add("good");
+      if (type === "warning") refs.status.classList.add("warning");
+      if (type === "error") refs.status.classList.add("error");
+    }
+
+    // ----------------------------------------------------------------------
+    // Excel export — builds an .xlsx that mirrors the master templates.
+    // ----------------------------------------------------------------------
+
+    // Renders the per-server Cash Sales / Cash Tips inputs for each pool and
+    // defaults the date to today.
+    function renderExportPanel(amRows, pmRows) {
+      if (!refs.expDate.value) {
+        var now = new Date();
+        var iso = now.getFullYear() + "-" +
+          String(now.getMonth() + 1).padStart(2, "0") + "-" +
+          String(now.getDate()).padStart(2, "0");
+        refs.expDate.value = iso;
+      }
+      renderCashInputs(refs.expAm, amRows, "am");
+      renderCashInputs(refs.expPm, pmRows, "pm");
+      refs.expStatus.classList.add("hidden");
+    }
+
+    function renderCashInputs(container, servers, prefix) {
+      container.innerHTML = "";
+
+      if (!servers.length) {
+        var none = document.createElement("p");
+        none.className = "small";
+        none.textContent = "No servers in this pool.";
+        container.appendChild(none);
+        return;
+      }
+
+      servers.forEach(function (server, index) {
+        var row = document.createElement("div");
+        row.className = "cash-row";
+
+        var name = document.createElement("span");
+        name.className = "cash-name";
+        name.textContent = server["FIRST NAMES"] + " (" + server["TOTAL HOURS"] + " h)";
+
+        var sales = document.createElement("input");
+        sales.type = "number"; sales.step = "0.01"; sales.min = "0";
+        sales.placeholder = "cash sales";
+        sales.id = prefix + "-sales-" + index;
+
+        var tips = document.createElement("input");
+        tips.type = "number"; tips.step = "0.01"; tips.min = "0";
+        tips.placeholder = "cash tips";
+        tips.id = prefix + "-tips-" + index;
+
+        row.appendChild(name);
+        row.appendChild(sales);
+        row.appendChild(tips);
+        container.appendChild(row);
+      });
+    }
+
+    function downloadWorkbook() {
+      if (typeof XLSX === "undefined") {
+        setExpStatus("The spreadsheet library didn't load (network may be blocked). Use the copy/paste tables instead.", true);
+        return;
+      }
+
+      var dateStr = formatDateMDY(refs.expDate.value);
+      var cash = numberOrZero(refs.exp3dCash.value);
+      var credit = numberOrZero(refs.exp3dCredit.value);
+
+      var split = latest.table2SplitIndex || 0;
+      var am = latest.table2.slice(0, split).map(function (s, i) { return readServer("am", i, s); });
+      var pm = latest.table2.slice(split).map(function (s, i) { return readServer("pm", i, s); });
+
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, build3DSheet(latest.table1, dateStr, cash, credit), "3D Tips");
+      XLSX.utils.book_append_sheet(wb, buildTinPlateSheet(am, pm, dateStr), "Tin Plate Cash");
+
+      var fname = "Tips_" + (refs.expDate.value || "day") + ".xlsx";
+      XLSX.writeFile(wb, fname);
+      setExpStatus("Downloaded " + fname + ".", false);
+    }
+
+    function readServer(prefix, index, server) {
+      return {
+        name: server["FIRST NAMES"],
+        hours: parseFloat(server["TOTAL HOURS"]) || 0,
+        cashSales: numberOrBlank(document.getElementById(prefix + "-sales-" + index).value),
+        cashTips: numberOrBlank(document.getElementById(prefix + "-tips-" + index).value)
+      };
+    }
+
+    // ----- worksheet builders (cell objects with live formulas) -----
+
+    // Cell markers: F("...") = formula, everything else is a literal value.
+    function F(formula) { return { __f: formula }; }
+
+    function makeCell(value) {
+      if (value && value.__f) return { t: "n", f: value.__f };
+      if (typeof value === "number") return { t: "n", v: value };
+      if (value === null || value === undefined || value === "") return null;
+      return { t: "s", v: String(value) };
+    }
+
+    function aoaToSheet(aoa) {
+      var ws = {};
+      var maxCol = 0;
+      for (var r = 0; r < aoa.length; r++) {
+        var rowArr = aoa[r] || [];
+        for (var c = 0; c < rowArr.length; c++) {
+          var cell = makeCell(rowArr[c]);
+          if (cell) ws[XLSX.utils.encode_cell({ r: r, c: c })] = cell;
+          if (c + 1 > maxCol) maxCol = c + 1;
+        }
+      }
+      ws["!ref"] = XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: Math.max(aoa.length - 1, 0), c: Math.max(maxCol - 1, 0) }
+      });
+      return ws;
+    }
+
+    // 3D Tips: one daily table (BOH + 3D), one cash pool + one credit pool.
+    function build3DSheet(table1, dateStr, cash, credit) {
+      var n = table1.length;
+      var totalRow = 3 + n;          // Excel row of the Total: line
+      var perHourRow = totalRow + 1; // Cash/Credit Per Hour line
+      var lastPerson = 2 + n;        // Excel row of the last person
+
+      var aoa = [];
+      aoa.push(["Date:", "Name", "Hours Worked", "Cash Tips", "Take Home Amount", "Credit Tips", "Paycheck Amount"]);
+      // Pool row: date + cash (D2) + credit (F2); E2 computes off the blank C2.
+      aoa.push([dateStr, "", "", cash, F("$E$" + perHourRow + "*C2"), credit]);
+
+      for (var i = 0; i < n; i++) {
+        var er = 3 + i;
+        aoa.push([
+          "", table1[i]["NAMES"], parseFloat(table1[i]["TOTAL HOURS"]) || 0, "",
+          F("$E$" + perHourRow + "*C" + er), "",
+          F("($G$" + perHourRow + "*C" + er + ")+E" + er)
+        ]);
+      }
+
+      aoa.push(["Total:", "", F("SUM(C3:C" + lastPerson + ")"), F("D2"), "", F("F2")]);
+      aoa.push(["", "", "", "Cash Per Hour", F("D" + totalRow + "/C" + totalRow),
+        "Credit Per Hour", F("F" + totalRow + "/C" + totalRow)]);
+
+      return aoaToSheet(aoa);
+    }
+
+    // Tin Plate: AM block then PM block, each with per-server cash sales/tips.
+    function buildTinPlateSheet(amServers, pmServers, dateStr) {
+      var aoa = [];
+
+      function addBlock(label, servers) {
+        if (!servers.length) return;
+        var headerRow = aoa.length + 1; // 1-based Excel row of this header
+        var firstPerson = headerRow + 1;
+        var n = servers.length;
+        var totalRow = firstPerson + n; // Total: directly after the people
+
+        aoa.push([label, "Name", "Hours Worked", "Cash Sales", "Cash Tips", "Tip Percent", "Take Home Amount"]);
+
+        for (var i = 0; i < n; i++) {
+          var er = firstPerson + i;
+          var s = servers[i];
+          aoa.push([
+            dateStr, s.name, s.hours,
+            s.cashSales === "" ? "" : s.cashSales,
+            s.cashTips === "" ? "" : s.cashTips,
+            F("E" + er + "/D" + er),
+            F("H" + totalRow + "*C" + er)
+          ]);
+        }
+
+        var rng = function (col) { return "SUM(" + col + firstPerson + ":" + col + (totalRow - 1) + ")"; };
+        aoa.push([
+          "Total:", "", F(rng("C")), F(rng("D")), F(rng("E")),
+          F("E" + totalRow + "/D" + totalRow), "Per Hour:", F("E" + totalRow + "/C" + totalRow)
+        ]);
+      }
+
+      addBlock("Date: AM", amServers);
+      if (amServers.length && pmServers.length) aoa.push([]); // blank gap between blocks
+      addBlock("Date: PM", pmServers);
+
+      if (!aoa.length) aoa.push(["No FOH servers in this CSV."]);
+      return aoaToSheet(aoa);
+    }
+
+    function numberOrZero(value) {
+      var n = parseFloat(String(value || "").replace(/,/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function numberOrBlank(value) {
+      var raw = String(value == null ? "" : value).trim();
+      if (raw === "") return "";
+      var n = parseFloat(raw.replace(/,/g, ""));
+      return Number.isFinite(n) ? n : "";
+    }
+
+    // "2024-06-07" -> "6/7/2024" to match the templates' Date: cells.
+    function formatDateMDY(isoValue) {
+      var raw = String(isoValue || "").trim();
+      var m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return raw;
+      return parseInt(m[2], 10) + "/" + parseInt(m[3], 10) + "/" + m[1];
+    }
+
+    function setExpStatus(message, isError) {
+      refs.expStatus.textContent = message;
+      refs.expStatus.className = "status " + (isError ? "error" : "good");
+    }
+
+    function parseCSV(text) {
+      var rows = [];
+      var row = [];
+      var cell = "";
+      var inQuotes = false;
+
+      for (var i = 0; i < text.length; i++) {
+        var ch = text[i];
+        var next = text[i + 1];
+
+        if (ch === '"') {
+          if (inQuotes && next === '"') {
+            cell += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+
+        if (ch === "," && !inQuotes) {
+          row.push(cell);
+          cell = "";
+          continue;
+        }
+
+        if ((ch === "\n" || ch === "\r") && !inQuotes) {
+          if (ch === "\r" && next === "\n") i++;
+          row.push(cell);
+          rows.push(row);
+          row = [];
+          cell = "";
+          continue;
+        }
+
+        cell += ch;
+      }
+
+      if (cell.length || row.length) {
+        row.push(cell);
+        rows.push(row);
+      }
+
+      return rows;
+    }
+  </script>
+</body>
+</html>
