@@ -1,9 +1,19 @@
 # 🍕 Dough Counter
 
-A tiny, self-contained app for counting doughs across two restaurants and
-three storage locations, then generating a copy-paste report.
+A tiny app for counting doughs across two restaurants and three storage
+locations, then generating a copy-paste report.
 
-## How to use
+There are two versions — use whichever you prefer:
+
+- **`dough-counter.scriptable.js`** — for the iOS **Scriptable** app. Paste it
+  into a new Scriptable script and run it. (Install steps are in a comment at
+  the top of the file.)
+- **`index.html`** — a self-contained web page that runs in any browser, phone
+  or desktop, with no install.
+
+Both produce the same report and use the same dough math.
+
+## How to use (web version)
 
 Open `index.html` in any browser — phone or desktop. No install, no internet
 needed. To keep it one tap away on a phone, open it and use **"Add to Home
