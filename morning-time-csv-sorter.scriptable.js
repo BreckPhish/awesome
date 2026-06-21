@@ -280,14 +280,16 @@ function addTable2Row(table2, row) {
   });
 }
 
-// Profiles that should never reach any table: online ordering, Toast default
-// profiles, hosts, managers (incl. hourly shift manager), and chefs.
+// Profiles that should never reach any table: the ghost "Three Daughters"
+// employee profile, online ordering, Toast default profiles, hosts, managers
+// (incl. hourly shift manager), and chefs.
 function isAlwaysExcluded(row) {
   const job = get(row, "Job");
   const employee = get(row, "Employee");
   const hay = job + " " + employee;
 
-  return /online\s*order(ing)?/i.test(hay)
+  return /three\s*daughters/i.test(employee)
+    || /online\s*order(ing)?/i.test(hay)
     || /toast\s*default/i.test(hay)
     || /\bdefault\b/i.test(job)
     || /\bhost(ess)?\b/i.test(job)

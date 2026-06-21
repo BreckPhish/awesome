@@ -141,105 +141,137 @@
 
     code { background: #eef0f2; padding: 1px 4px; border-radius: 4px; }
 
+    .qa-line { margin-top: 8px; font-size: 13px; color: var(--muted); }
+    .qa-line b { color: var(--ink); font-variant-numeric: tabular-nums; }
+    .qa-check { white-space: nowrap; }
+
+    .targets-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .target-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .target-head h2 { margin: 0; }
+    button.big { font-size: 14px; padding: 10px 14px; }
+
+    .details-panel > summary { font-size: 16px; }
+    .details-panel .rules { margin: 8px 0 4px; }
+    .subpanel { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+
     .hidden { display: none; }
   </style>
 </head>
 <body>
   <main class="app">
     <header class="header">
-      <h1>Morning Time CSV Sorter</h1>
-      <p>Upload the day&rsquo;s time-entry CSV. The tool creates two copy-ready tables for your master spreadsheets.</p>
+      <h1>Morning Tip Sorter</h1>
+      <p>Upload the day&rsquo;s time CSV, then copy each table into your tip sheets. Your Excel templates do the tip math.</p>
     </header>
 
     <section class="panel upload-panel">
-      <h2>1. Upload daily CSV</h2>
       <input id="csv-input" type="file" accept=".csv,text/csv" />
       <div id="status" class="status">No CSV loaded yet.</div>
-      <details>
-        <summary>Sorting rules</summary>
-        <ul>
-          <li><strong>Table 1:</strong> Bussers, Dishwashers, Prep Cooks, Cooks, and all Three Daughters employees.</li>
-          <li><strong>Three Daughters detection:</strong> employee name contains <code>Three Daughters</code>, job contains <code>3D</code>, or location contains <code>Three Daughters</code>.</li>
-          <li><strong>Table 1 names:</strong> first names only; Three Daughters rows get <code> 3D</code> after the name and sort first.</li>
-          <li><strong>Table 1 hours:</strong> combined by displayed first name.</li>
-          <li><strong>Table 2:</strong> Servers, Bartenders, Bar Lead, and Trainer. Trainee is excluded.</li>
-          <li><strong>Table 2 layout:</strong> not combined; sorted by clock-in time and labeled as two independent FOH cash tip pools &mdash; the <strong>AM tip pool</strong> (clock-in before <code>2:00 PM</code>) and the <strong>PM tip pool</strong> (clock-in 2:00 PM &amp; after). Column 5 shows each row&rsquo;s job title.</li>
-          <li><strong>Always excluded:</strong> Online ordering profiles, Toast default profiles, Hosts, Managers (including Hourly Shift Manager), and Chefs never appear in Table 1, Table 2, or unmatched rows.</li>
-          <li><strong>Column copy:</strong> each table has a button per column to copy just that column&rsquo;s values. Table 2&rsquo;s column buttons are split into the AM tip pool (before 2 PM) and PM tip pool (2 PM &amp; after) so each column copies separately per pool.</li>
-          <li><strong>Hours source:</strong> uses <code>Payable Hours</code> first, then falls back to <code>Total Hours</code>.</li>
-        </ul>
-      </details>
     </section>
 
     <section id="qa-panel" class="panel hidden">
-      <h2>2. QA totals</h2>
-      <div class="qa-grid">
-        <div class="qa-card"><div class="qa-label">Source rows</div><div id="qa-source-rows" class="qa-value">0</div></div>
-        <div class="qa-card"><div class="qa-label">Source payable hours</div><div id="qa-source-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Table 1 hours</div><div id="qa-table1-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Table 2 hours</div><div id="qa-table2-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Unmatched hours</div><div id="qa-unmatched-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Excluded hours</div><div id="qa-excluded-hours" class="qa-value">0.00</div></div>
-        <div class="qa-card"><div class="qa-label">Check total</div><div id="qa-check-total" class="qa-value">0.00</div></div>
-      </div>
       <div id="qa-message" class="status good qa-message">Ready.</div>
+      <div class="qa-line">
+        <b id="qa-source-rows">0</b> rows &middot; source <b id="qa-source-hours">0.00</b> h =
+        3D <b id="qa-table1-hours">0.00</b> + FOH <b id="qa-table2-hours">0.00</b> +
+        unmatched <b id="qa-unmatched-hours">0.00</b> + excluded <b id="qa-excluded-hours">0.00</b>
+        <span class="qa-check">(check total <b id="qa-check-total">0.00</b>)</span>
+      </div>
     </section>
 
-    <section id="results-panel" class="results-grid hidden">
-      <div class="panel">
-        <h2>Table 1 &mdash; BOH / bussers / 3D</h2>
-        <p class="small">&ldquo;Name + Hours&rdquo; pastes straight into the 3D template&rsquo;s Name/Hours columns; type the day&rsquo;s cash &amp; credit pool amounts into the template and its formulas compute Take Home / Paycheck.</p>
+    <section id="targets" class="targets-grid hidden">
+      <div class="panel target">
+        <div class="target-head">
+          <h2>3D Tips</h2>
+          <button id="copy-t1-namehours" type="button" class="big">Copy Name + Hours</button>
+        </div>
+        <p class="small">BOH + Three Daughters. Paste into the 3D sheet&rsquo;s Name &amp; Hours columns; enter the cash &amp; credit pools in Excel and the formulas do the rest.</p>
+        <div id="t1-nh-view"></div>
+      </div>
+
+      <div class="panel target">
+        <div class="target-head">
+          <h2>Tin Plate &middot; AM pool</h2>
+          <button id="copy-t2-am-namehours" type="button" class="big">Copy Name + Hours</button>
+        </div>
+        <p class="small">FOH clocked in <strong>before 2 PM</strong>. Paste into the AM table; enter each server&rsquo;s cash in Excel.</p>
+        <div id="t2-am-view"></div>
+      </div>
+
+      <div class="panel target">
+        <div class="target-head">
+          <h2>Tin Plate &middot; PM pool</h2>
+          <button id="copy-t2-pm-namehours" type="button" class="big">Copy Name + Hours</button>
+        </div>
+        <p class="small">FOH clocked in <strong>2 PM &amp; after</strong>. Paste into the PM table; enter each server&rsquo;s cash in Excel.</p>
+        <div id="t2-pm-view"></div>
+      </div>
+    </section>
+
+    <details id="details-panel" class="panel details-panel hidden">
+      <summary>More detail &amp; other copy options</summary>
+
+      <details class="rules">
+        <summary>Sorting rules</summary>
+        <ul>
+          <li><strong>3D Tips (Table 1):</strong> Bussers, Dishwashers, Prep Cooks, Cooks, and all Three Daughters employees, combined by first name; Three Daughters employees keep a <code> 3D</code> suffix and sort first.</li>
+          <li><strong>Tin Plate (Table 2):</strong> Servers, Bartenders, Bar Lead, and Trainer &mdash; split into the AM pool (clock-in before <code>2:00 PM</code>) and PM pool (2:00 PM &amp; after). Trainee is excluded.</li>
+          <li><strong>Always excluded:</strong> the ghost <code>Three Daughters</code> employee profile, Online ordering, Toast default, Hosts, Managers (incl. Hourly Shift Manager), and Chefs &mdash; never in any tip table.</li>
+          <li><strong>Hours source:</strong> uses <code>Payable Hours</code> first, then falls back to <code>Total Hours</code>.</li>
+        </ul>
+      </details>
+
+      <div class="results-grid">
+        <div class="subpanel">
+          <h2>Table 1 &mdash; 3D Tips (all columns)</h2>
+          <div class="button-row">
+            <button id="copy-t1-rows" type="button" class="secondary">Copy all columns</button>
+            <button id="copy-t1-headers" type="button" class="secondary">Copy with headers</button>
+          </div>
+          <div class="col-copy">
+            <span class="col-copy-label">Copy a single column:</span>
+            <div id="table1-cols" class="button-row col-buttons"></div>
+          </div>
+          <div id="table1-view"></div>
+          <h3>Paste-ready TSV</h3>
+          <textarea id="table1-tsv" readonly></textarea>
+        </div>
+
+        <div class="subpanel">
+          <h2>Table 2 &mdash; Tin Plate pools (all columns)</h2>
+          <div class="button-row">
+            <button id="copy-t2-am" type="button" class="secondary">Copy AM (all columns)</button>
+            <button id="copy-t2-pm" type="button" class="secondary">Copy PM (all columns)</button>
+            <button id="copy-t2-headers" type="button" class="secondary">Copy both with headers</button>
+          </div>
+          <div class="col-copy">
+            <span class="col-copy-label">AM pool &mdash; copy a single column:</span>
+            <div id="table2-cols-lunch" class="button-row col-buttons"></div>
+            <span class="col-copy-label">PM pool &mdash; copy a single column:</span>
+            <div id="table2-cols-dinner" class="button-row col-buttons"></div>
+          </div>
+          <div id="table2-view"></div>
+          <h3>Paste-ready TSV</h3>
+          <textarea id="table2-tsv" readonly></textarea>
+        </div>
+      </div>
+
+      <div class="subpanel">
+        <h2>Unmatched rows</h2>
+        <p class="small">Rows that didn&rsquo;t meet Table 1 or Table 2 rules. Excluded profiles are removed before this section.</p>
         <div class="button-row">
-          <button id="copy-t1-namehours" type="button">Copy Name + Hours</button>
-          <button id="copy-t1-rows" type="button" class="secondary">Copy all columns</button>
-          <button id="copy-t1-headers" type="button" class="secondary">Copy with headers</button>
+          <button id="copy-unmatched" type="button" class="secondary">Copy unmatched with headers</button>
         </div>
-        <div class="col-copy">
-          <span class="col-copy-label">Copy a single column (values only, top to bottom):</span>
-          <div id="table1-cols" class="button-row col-buttons"></div>
-        </div>
-        <div id="table1-view"></div>
-        <h3>Paste-ready TSV</h3>
-        <textarea id="table1-tsv" readonly></textarea>
+        <div id="unmatched-view"></div>
+        <textarea id="unmatched-tsv" readonly></textarea>
       </div>
 
-      <div class="panel">
-        <h2>Table 2 &mdash; FOH cash tip pools</h2>
-        <p class="small">Split into the <strong>AM tip pool</strong> (clock-in before 2 PM) and <strong>PM tip pool</strong> (clock-in 2 PM &amp; after). The two pools are independent. Paste each pool&rsquo;s Name + Hours into its Tin Plate table, then enter each server&rsquo;s cash sales &amp; cash tips in Excel &mdash; the template formulas compute Tip Percent / Take Home.</p>
-        <div class="button-row">
-          <button id="copy-t2-am-namehours" type="button">Copy AM Name + Hours</button>
-          <button id="copy-t2-pm-namehours" type="button">Copy PM Name + Hours</button>
-          <button id="copy-t2-am" type="button" class="secondary">Copy AM (all columns)</button>
-          <button id="copy-t2-pm" type="button" class="secondary">Copy PM (all columns)</button>
-          <button id="copy-t2-headers" type="button" class="secondary">Copy both with headers</button>
-        </div>
-        <div class="col-copy">
-          <span class="col-copy-label">AM tip pool &mdash; copy a single column (clock-in before 2 PM):</span>
-          <div id="table2-cols-lunch" class="button-row col-buttons"></div>
-          <span class="col-copy-label">PM tip pool &mdash; copy a single column (clock-in 2 PM &amp; after):</span>
-          <div id="table2-cols-dinner" class="button-row col-buttons"></div>
-        </div>
-        <div id="table2-view"></div>
-        <h3>Paste-ready TSV</h3>
-        <textarea id="table2-tsv" readonly></textarea>
+      <div class="subpanel">
+        <h2>Excluded rows (QA only)</h2>
+        <p class="small">Ghost &ldquo;Three Daughters&rdquo; profile, Online ordering, Toast default, Hosts, Managers, and Chefs &mdash; shown only for QA, never in a tip table.</p>
+        <div id="excluded-view"></div>
       </div>
-    </section>
-
-    <section id="unmatched-panel" class="panel hidden">
-      <h2>Unmatched rows</h2>
-      <p class="small">Rows that did not meet Table 1 or Table 2 rules. Excluded profiles are removed before this section.</p>
-      <div class="button-row">
-        <button id="copy-unmatched" type="button" class="secondary">Copy unmatched with headers</button>
-      </div>
-      <div id="unmatched-view"></div>
-      <textarea id="unmatched-tsv" readonly></textarea>
-    </section>
-
-    <section id="excluded-panel" class="panel hidden">
-      <h2>Excluded rows</h2>
-      <p class="small">Online ordering, Toast default, Host, Manager, and Chef rows are shown only for QA and are not included in either copy/paste table.</p>
-      <div id="excluded-view"></div>
-    </section>
+    </details>
   </main>
 
   <script>
@@ -254,10 +286,12 @@
         status: document.getElementById("status"),
         input: document.getElementById("csv-input"),
         qaPanel: document.getElementById("qa-panel"),
-        resultsPanel: document.getElementById("results-panel"),
-        unmatchedPanel: document.getElementById("unmatched-panel"),
-        excludedPanel: document.getElementById("excluded-panel"),
+        targets: document.getElementById("targets"),
+        detailsPanel: document.getElementById("details-panel"),
         qaMessage: document.getElementById("qa-message"),
+        t1NhView: document.getElementById("t1-nh-view"),
+        t2AmView: document.getElementById("t2-am-view"),
+        t2PmView: document.getElementById("t2-pm-view"),
         table1View: document.getElementById("table1-view"),
         table2View: document.getElementById("table2-view"),
         table1Cols: document.getElementById("table1-cols"),
@@ -509,14 +543,16 @@
       });
     }
 
-    // Profiles that should never reach any table: online ordering, Toast
-    // default profiles, hosts, managers (incl. hourly shift manager), chefs.
+    // Profiles that should never reach any table: the ghost "Three Daughters"
+    // employee profile, online ordering, Toast default profiles, hosts,
+    // managers (incl. hourly shift manager), and chefs.
     function isAlwaysExcluded(row) {
       var job = get(row, "Job");
       var employee = get(row, "Employee");
       var hay = job + " " + employee;
 
-      return /online\s*order(ing)?/i.test(hay)
+      return /three\s*daughters/i.test(employee)
+        || /online\s*order(ing)?/i.test(hay)
         || /toast\s*default/i.test(hay)
         || /\bdefault\b/i.test(job)
         || /\bhost(ess)?\b/i.test(job)
@@ -650,9 +686,16 @@
 
     function renderAll(processed, sourceRowCount) {
       refs.qaPanel.classList.remove("hidden");
-      refs.resultsPanel.classList.remove("hidden");
-      refs.unmatchedPanel.classList.remove("hidden");
-      refs.excludedPanel.classList.remove("hidden");
+      refs.targets.classList.remove("hidden");
+      refs.detailsPanel.classList.remove("hidden");
+
+      var amRows = processed.table2.slice(0, processed.table2SplitIndex);
+      var pmRows = processed.table2.slice(processed.table2SplitIndex);
+
+      // Primary workflow: the three paste targets (Name + Hours only).
+      renderNameHours(refs.t1NhView, processed.table1, "NAMES", "TOTAL HOURS");
+      renderNameHours(refs.t2AmView, amRows, "FIRST NAMES", "TOTAL HOURS");
+      renderNameHours(refs.t2PmView, pmRows, "FIRST NAMES", "TOTAL HOURS");
 
       renderTable(refs.table1View, processed.table1);
       renderTable2(refs.table2View, processed.table2, processed.table2SplitIndex);
@@ -663,8 +706,6 @@
       // into the AM tip pool (before 2 PM) and PM tip pool (2 PM & after).
       var t1Headers = processed.table1.length ? Object.keys(processed.table1[0]) : [];
       var t2Headers = processed.table2.length ? Object.keys(processed.table2[0]) : [];
-      var amRows = processed.table2.slice(0, processed.table2SplitIndex);
-      var pmRows = processed.table2.slice(processed.table2SplitIndex);
 
       buildColumnCopyButtons(refs.table1Cols, processed.table1, t1Headers, "");
       buildColumnCopyButtons(refs.table2ColsLunch, amRows, t2Headers, "AM tip pool");
@@ -702,9 +743,8 @@
     function hideResults() {
       if (!refs.qaPanel) return;
       refs.qaPanel.classList.add("hidden");
-      refs.resultsPanel.classList.add("hidden");
-      refs.unmatchedPanel.classList.add("hidden");
-      refs.excludedPanel.classList.add("hidden");
+      refs.targets.classList.add("hidden");
+      refs.detailsPanel.classList.add("hidden");
     }
 
     function sumColumn(rows, key) {
@@ -712,6 +752,44 @@
         var n = parseFloat(String(row[key] || "0").replace(/,/g, ""));
         return sum + (Number.isFinite(n) ? n : 0);
       }, 0);
+    }
+
+    // Compact two-column (Name / Hours) preview for the primary paste targets.
+    function renderNameHours(target, rows, nameKey, hoursKey) {
+      target.innerHTML = "";
+
+      if (!rows.length) {
+        target.innerHTML = '<p class="small">No one in this table.</p>';
+        return;
+      }
+
+      var table = document.createElement("table");
+      var thead = document.createElement("thead");
+      var trHead = document.createElement("tr");
+      ["Name", "Hours"].forEach(function (label, i) {
+        var th = document.createElement("th");
+        th.textContent = label;
+        if (i === 1) th.className = "num";
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+
+      var tbody = document.createElement("tbody");
+      rows.forEach(function (row) {
+        var tr = document.createElement("tr");
+        var nameTd = document.createElement("td");
+        nameTd.textContent = row[nameKey];
+        var hoursTd = document.createElement("td");
+        hoursTd.className = "num";
+        hoursTd.textContent = row[hoursKey];
+        tr.appendChild(nameTd);
+        tr.appendChild(hoursTd);
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      target.appendChild(table);
     }
 
     function renderTable(target, rows) {
