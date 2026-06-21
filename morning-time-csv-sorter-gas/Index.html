@@ -154,6 +154,25 @@
     .details-panel .rules { margin: 8px 0 4px; }
     .subpanel { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
 
+    /* tip-amount inputs */
+    .amount-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 12px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .money { position: relative; }
+    .money::before { content: "$"; position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+    .money input { width: 130px; padding: 9px 9px 9px 20px; border: 1px solid var(--line); border-radius: 8px;
+      font-size: 15px; font-variant-numeric: tabular-nums; background: #fff; }
+    .money input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+
+    table.pool td.money-cell { position: relative; padding: 4px 6px; }
+    table.pool td.money-cell::before { content: "$"; position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); font-size: 12px; }
+    table.pool input { width: 100%; min-width: 78px; padding: 6px 6px 6px 16px; border: 1px solid var(--line);
+      border-radius: 6px; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+    table.pool input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+    .pool-total { margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .pool-total b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -185,25 +204,35 @@
           <h2>3D Tips</h2>
           <button id="copy-t1-namehours" type="button" class="big">Copy Name + Hours</button>
         </div>
-        <p class="small">BOH + Three Daughters. Paste into the 3D sheet&rsquo;s Name &amp; Hours columns; enter the cash &amp; credit pools in Excel and the formulas do the rest.</p>
+        <p class="small">BOH + Three Daughters. Paste Name + Hours into the 3D sheet, then put these pool totals in the template&rsquo;s Cash Tips &amp; Credit Tips cells.</p>
+        <div class="amount-row">
+          <div class="field">
+            <label>Cash tips (pool)</label>
+            <div class="money"><input id="d3-cash" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" /></div>
+          </div>
+          <div class="field">
+            <label>Credit tips (pool)</label>
+            <div class="money"><input id="d3-credit" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" /></div>
+          </div>
+        </div>
         <div id="t1-nh-view"></div>
       </div>
 
       <div class="panel target">
         <div class="target-head">
           <h2>Tin Plate &middot; AM pool</h2>
-          <button id="copy-t2-am-namehours" type="button" class="big">Copy Name + Hours</button>
+          <button id="copy-t2-am-namehours" type="button" class="big">Copy pool rows</button>
         </div>
-        <p class="small">FOH clocked in <strong>before 2 PM</strong>. Paste into the AM table; enter each server&rsquo;s cash in Excel.</p>
+        <p class="small">FOH clocked in <strong>before 2 PM</strong>. Enter each server&rsquo;s cash transactions &amp; cash tips; &ldquo;Copy pool rows&rdquo; gives Name, Hours, Cash transactions, Cash tips for the AM table.</p>
         <div id="t2-am-view"></div>
       </div>
 
       <div class="panel target">
         <div class="target-head">
           <h2>Tin Plate &middot; PM pool</h2>
-          <button id="copy-t2-pm-namehours" type="button" class="big">Copy Name + Hours</button>
+          <button id="copy-t2-pm-namehours" type="button" class="big">Copy pool rows</button>
         </div>
-        <p class="small">FOH clocked in <strong>2 PM &amp; after</strong>. Paste into the PM table; enter each server&rsquo;s cash in Excel.</p>
+        <p class="small">FOH clocked in <strong>2 PM &amp; after</strong>. Enter each server&rsquo;s cash transactions &amp; cash tips, then copy the pool rows into the PM table.</p>
         <div id="t2-pm-view"></div>
       </div>
     </section>
@@ -328,11 +357,11 @@
       });
       document.getElementById("copy-t2-am-namehours").addEventListener("click", function () {
         var split = latest.table2SplitIndex || 0;
-        copyText(twoColumnTSV(latest.table2.slice(0, split), "FIRST NAMES", "TOTAL HOURS"), "AM pool Name + Hours copied.");
+        copyText(poolTSV(latest.table2.slice(0, split), "am"), "AM pool rows copied (Name, Hours, Cash transactions, Cash tips).");
       });
       document.getElementById("copy-t2-pm-namehours").addEventListener("click", function () {
         var split = latest.table2SplitIndex || 0;
-        copyText(twoColumnTSV(latest.table2.slice(split), "FIRST NAMES", "TOTAL HOURS"), "PM pool Name + Hours copied.");
+        copyText(poolTSV(latest.table2.slice(split), "pm"), "PM pool rows copied (Name, Hours, Cash transactions, Cash tips).");
       });
       document.getElementById("copy-unmatched").addEventListener("click", function () {
         copyText(toTSV(latest.unmatched, true), "Unmatched rows copied.");
@@ -692,10 +721,16 @@
       var amRows = processed.table2.slice(0, processed.table2SplitIndex);
       var pmRows = processed.table2.slice(processed.table2SplitIndex);
 
-      // Primary workflow: the three paste targets (Name + Hours only).
+      // Primary workflow: 3D = Name + Hours (with pool tip fields above);
+      // each Tin Plate pool = an editable table for per-server cash entry.
       renderNameHours(refs.t1NhView, processed.table1, "NAMES", "TOTAL HOURS");
-      renderNameHours(refs.t2AmView, amRows, "FIRST NAMES", "TOTAL HOURS");
-      renderNameHours(refs.t2PmView, pmRows, "FIRST NAMES", "TOTAL HOURS");
+      renderPoolInputs(refs.t2AmView, amRows, "am");
+      renderPoolInputs(refs.t2PmView, pmRows, "pm");
+
+      var d3Cash = document.getElementById("d3-cash");
+      var d3Credit = document.getElementById("d3-credit");
+      if (d3Cash) d3Cash.value = "";
+      if (d3Credit) d3Credit.value = "";
 
       renderTable(refs.table1View, processed.table1);
       renderTable2(refs.table2View, processed.table2, processed.table2SplitIndex);
@@ -752,6 +787,113 @@
         var n = parseFloat(String(row[key] || "0").replace(/,/g, ""));
         return sum + (Number.isFinite(n) ? n : 0);
       }, 0);
+    }
+
+    // Editable pool table: Name + Hours (read-only) plus per-server cash
+    // transactions and cash tips inputs, with a live pool total. prefix is
+    // "am" or "pm" so the input ids stay unique.
+    function renderPoolInputs(target, rows, prefix) {
+      target.innerHTML = "";
+
+      if (!rows.length) {
+        target.innerHTML = '<p class="small">No servers in this pool.</p>';
+        return;
+      }
+
+      var table = document.createElement("table");
+      table.className = "pool";
+      var thead = document.createElement("thead");
+      var trHead = document.createElement("tr");
+      ["Name", "Hours", "Cash transactions", "Cash tips"].forEach(function (label, i) {
+        var th = document.createElement("th");
+        th.textContent = label;
+        if (i === 1) th.className = "num";
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+
+      var tbody = document.createElement("tbody");
+      rows.forEach(function (row, i) {
+        var tr = document.createElement("tr");
+
+        var nameTd = document.createElement("td");
+        nameTd.textContent = row["FIRST NAMES"];
+        var hoursTd = document.createElement("td");
+        hoursTd.className = "num";
+        hoursTd.textContent = row["TOTAL HOURS"];
+
+        tr.appendChild(nameTd);
+        tr.appendChild(hoursTd);
+        tr.appendChild(moneyCell(prefix + "-cash-" + i));
+        tr.appendChild(moneyCell(prefix + "-tips-" + i));
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      target.appendChild(table);
+
+      var total = document.createElement("div");
+      total.className = "pool-total";
+      total.id = prefix + "-total";
+      target.appendChild(total);
+
+      Array.prototype.forEach.call(target.querySelectorAll("input"), function (input) {
+        input.addEventListener("input", function () { updatePoolTotal(prefix, rows.length); });
+      });
+      updatePoolTotal(prefix, rows.length);
+    }
+
+    function moneyCell(id) {
+      var td = document.createElement("td");
+      td.className = "money-cell";
+      var input = document.createElement("input");
+      input.type = "number";
+      input.step = "0.01";
+      input.min = "0";
+      input.inputMode = "decimal";
+      input.id = id;
+      input.placeholder = "0.00";
+      td.appendChild(input);
+      return td;
+    }
+
+    function updatePoolTotal(prefix, count) {
+      var tips = 0;
+      var cash = 0;
+      for (var i = 0; i < count; i++) {
+        tips += amountValue(prefix + "-tips-" + i);
+        cash += amountValue(prefix + "-cash-" + i);
+      }
+      var el = document.getElementById(prefix + "-total");
+      if (!el) return;
+      el.innerHTML = "Cash tips <b>$" + tips.toFixed(2) + "</b> &middot; cash transactions <b>$" +
+        cash.toFixed(2) + "</b> &middot; " + count + " server" + (count === 1 ? "" : "s");
+    }
+
+    function amountValue(id) {
+      var el = document.getElementById(id);
+      if (!el) return 0;
+      var n = parseFloat(String(el.value || "").replace(/,/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    // Pool rows for pasting into the Tin Plate template's B:E columns:
+    // Name, Hours, Cash transactions (Cash Sales), Cash tips.
+    function poolTSV(rows, prefix) {
+      return rows.map(function (row, i) {
+        return [
+          cleanCell(row["FIRST NAMES"]),
+          cleanCell(row["TOTAL HOURS"]),
+          cleanCell(amountField(prefix + "-cash-" + i)),
+          cleanCell(amountField(prefix + "-tips-" + i))
+        ].join("\t");
+      }).join("\n");
+    }
+
+    function amountField(id) {
+      var el = document.getElementById(id);
+      return el ? el.value : "";
     }
 
     // Compact two-column (Name / Hours) preview for the primary paste targets.
