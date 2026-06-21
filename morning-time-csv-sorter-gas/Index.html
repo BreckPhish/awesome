@@ -172,6 +172,7 @@
     table.pool input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
     .pool-total { margin-top: 10px; font-size: 13px; color: var(--muted); }
     .pool-total b { color: var(--ink); font-variant-numeric: tabular-nums; }
+    table.pool .sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--muted); }
 
     .hidden { display: none; }
   </style>
@@ -208,11 +209,11 @@
         <div class="amount-row">
           <div class="field">
             <label>Cash tips (pool)</label>
-            <div class="money"><input id="d3-cash" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" /></div>
+            <div class="money"><input id="d3-cash" class="nav-input" type="text" inputmode="decimal" placeholder="0.00" /></div>
           </div>
           <div class="field">
             <label>Credit tips (pool)</label>
-            <div class="money"><input id="d3-credit" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" /></div>
+            <div class="money"><input id="d3-credit" class="nav-input" type="text" inputmode="decimal" placeholder="0.00" /></div>
           </div>
         </div>
         <div id="t1-nh-view"></div>
@@ -366,7 +367,54 @@
       document.getElementById("copy-unmatched").addEventListener("click", function () {
         copyText(toTSV(latest.unmatched, true), "Unmatched rows copied.");
       });
+
+      // Arrow-key / Enter navigation between the cash-amount input fields.
+      document.addEventListener("keydown", handleAmountNav);
     });
+
+    // Treat all .nav-input fields as a 2-column grid (DOM order): left column =
+    // cash / 3D cash tips, right column = tips / 3D credit tips. Up/Down move a
+    // row within the column; Left/Right hop fields when the caret is at an edge;
+    // Enter jumps to the field below.
+    function handleAmountNav(event) {
+      var el = event.target;
+      if (!el || !el.classList || !el.classList.contains("nav-input")) return;
+
+      var key = event.key;
+      if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "ArrowLeft" &&
+          key !== "ArrowRight" && key !== "Enter") return;
+
+      var inputs = Array.prototype.slice.call(document.querySelectorAll(".nav-input"));
+      var i = inputs.indexOf(el);
+      if (i === -1) return;
+
+      var cols = 2;
+      var target = -1;
+
+      if (key === "ArrowDown") target = i + cols;
+      else if (key === "ArrowUp") target = i - cols;
+      else if (key === "Enter") target = (i + cols < inputs.length) ? i + cols : i + 1;
+      else if (key === "ArrowRight") { if (caretAtEnd(el)) target = i + 1; else return; }
+      else if (key === "ArrowLeft") { if (caretAtStart(el)) target = i - 1; else return; }
+
+      // Stay put (but still swallow the key) when there's no field to move to.
+      event.preventDefault();
+      if (target >= 0 && target < inputs.length) {
+        inputs[target].focus();
+        if (inputs[target].select) inputs[target].select();
+      }
+    }
+
+    function caretAtStart(el) {
+      try { return el.selectionStart === 0 && el.selectionEnd === 0; } catch (e) { return true; }
+    }
+
+    function caretAtEnd(el) {
+      try {
+        var len = String(el.value || "").length;
+        return el.selectionStart === len && el.selectionEnd === len;
+      } catch (e) { return true; }
+    }
 
     function emptyResults() {
       return {
@@ -492,6 +540,8 @@
             "NAMES": item.name,
             "TOTAL HOURS": formatHours(item.hours),
             "JOB TITLE": Array.from(item.jobs).join(" / "),
+            "CLOCK IN": item.clockIn,
+            "CLOCK OUT": item.clockOut,
             "_is3D": item.is3D
           };
         })
@@ -503,7 +553,9 @@
           return {
             "NAMES": row["NAMES"],
             "TOTAL HOURS": row["TOTAL HOURS"],
-            "JOB TITLE": row["JOB TITLE"]
+            "JOB TITLE": row["JOB TITLE"],
+            "CLOCK IN": row["CLOCK IN"],
+            "CLOCK OUT": row["CLOCK OUT"]
           };
         });
 
@@ -550,15 +602,25 @@
       var key = name.toLowerCase();
       var hours = getHours(row);
       var job = cleanJobTitle(get(row, "Job"));
+      var timeIn = get(row, "Time In");
+      var timeOut = get(row, "Time Out");
+      var inMin = timeToMinutes(timeIn);
+      var outMin = timeToMinutes(timeOut);
 
       if (!map.has(key)) {
-        map.set(key, { name: name, hours: 0, jobs: new Set(), is3D: is3D });
+        map.set(key, {
+          name: name, hours: 0, jobs: new Set(), is3D: is3D,
+          inMin: Infinity, outMin: -Infinity, clockIn: "", clockOut: ""
+        });
       }
 
       var item = map.get(key);
       item.hours += hours;
       item.is3D = item.is3D || is3D;
       if (job) item.jobs.add(job);
+      // Display the day's earliest clock-in and latest clock-out for the person.
+      if (inMin !== 99999 && inMin < item.inMin) { item.inMin = inMin; item.clockIn = timeIn; }
+      if (outMin !== 99999 && outMin > item.outMin) { item.outMin = outMin; item.clockOut = timeOut; }
     }
 
     function addTable2Row(table2, row) {
@@ -723,7 +785,7 @@
 
       // Primary workflow: 3D = Name + Hours (with pool tip fields above);
       // each Tin Plate pool = an editable table for per-server cash entry.
-      renderNameHours(refs.t1NhView, processed.table1, "NAMES", "TOTAL HOURS");
+      renderThreeDee(refs.t1NhView, processed.table1);
       renderPoolInputs(refs.t2AmView, amRows, "am");
       renderPoolInputs(refs.t2PmView, pmRows, "pm");
 
@@ -816,11 +878,17 @@
       rows.forEach(function (row, i) {
         var tr = document.createElement("tr");
 
+        // Name, with the clock-in/out window in gray underneath (display only).
         var nameTd = document.createElement("td");
-        nameTd.textContent = row["FIRST NAMES"];
+        nameTd.appendChild(document.createTextNode(row["FIRST NAMES"]));
+        var times = clockRange(row["CLOCK IN TIME"], row["CLOCK OUT TIME"]);
+        if (times) nameTd.appendChild(subLine(times));
+
+        // Hours, with the job title in gray underneath (display only).
         var hoursTd = document.createElement("td");
         hoursTd.className = "num";
-        hoursTd.textContent = row["TOTAL HOURS"];
+        hoursTd.appendChild(document.createTextNode(row["TOTAL HOURS"]));
+        if (row["JOB TITLE"]) hoursTd.appendChild(subLine(row["JOB TITLE"]));
 
         tr.appendChild(nameTd);
         tr.appendChild(hoursTd);
@@ -844,14 +912,27 @@
       updatePoolTotal(prefix, rows.length);
     }
 
+    function subLine(text) {
+      var span = document.createElement("span");
+      span.className = "sub";
+      span.textContent = text;
+      return span;
+    }
+
+    function clockRange(timeIn, timeOut) {
+      var a = String(timeIn || "").trim();
+      var b = String(timeOut || "").trim();
+      if (a && b) return a + " – " + b;
+      return a || b || "";
+    }
+
     function moneyCell(id) {
       var td = document.createElement("td");
       td.className = "money-cell";
       var input = document.createElement("input");
-      input.type = "number";
-      input.step = "0.01";
-      input.min = "0";
+      input.type = "text";
       input.inputMode = "decimal";
+      input.className = "nav-input";
       input.id = id;
       input.placeholder = "0.00";
       td.appendChild(input);
@@ -896,8 +977,9 @@
       return el ? el.value : "";
     }
 
-    // Compact two-column (Name / Hours) preview for the primary paste targets.
-    function renderNameHours(target, rows, nameKey, hoursKey) {
+    // 3D Tips preview: Name + Hours plus clock-in/out and job for reference.
+    // The "Copy Name + Hours" button still copies only Name + Hours.
+    function renderThreeDee(target, rows) {
       target.innerHTML = "";
 
       if (!rows.length) {
@@ -905,13 +987,21 @@
         return;
       }
 
+      var cols = [
+        { key: "NAMES", label: "Name" },
+        { key: "TOTAL HOURS", label: "Hours", num: true },
+        { key: "CLOCK IN", label: "Clock In" },
+        { key: "CLOCK OUT", label: "Clock Out" },
+        { key: "JOB TITLE", label: "Job" }
+      ];
+
       var table = document.createElement("table");
       var thead = document.createElement("thead");
       var trHead = document.createElement("tr");
-      ["Name", "Hours"].forEach(function (label, i) {
+      cols.forEach(function (c) {
         var th = document.createElement("th");
-        th.textContent = label;
-        if (i === 1) th.className = "num";
+        th.textContent = c.label;
+        if (c.num) th.className = "num";
         trHead.appendChild(th);
       });
       thead.appendChild(trHead);
@@ -919,13 +1009,12 @@
       var tbody = document.createElement("tbody");
       rows.forEach(function (row) {
         var tr = document.createElement("tr");
-        var nameTd = document.createElement("td");
-        nameTd.textContent = row[nameKey];
-        var hoursTd = document.createElement("td");
-        hoursTd.className = "num";
-        hoursTd.textContent = row[hoursKey];
-        tr.appendChild(nameTd);
-        tr.appendChild(hoursTd);
+        cols.forEach(function (c) {
+          var td = document.createElement("td");
+          td.textContent = row[c.key];
+          if (c.num) td.className = "num";
+          tr.appendChild(td);
+        });
         tbody.appendChild(tr);
       });
 

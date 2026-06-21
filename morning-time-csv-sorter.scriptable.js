@@ -195,6 +195,8 @@ function buildTables(rows) {
         "NAMES": item.name,
         "TOTAL HOURS": formatHours(item.hours),
         "JOB TITLE": Array.from(item.jobs).join(" / "),
+        "CLOCK IN": item.clockIn,
+        "CLOCK OUT": item.clockOut,
         "_is3D": item.is3D
       };
     })
@@ -206,7 +208,9 @@ function buildTables(rows) {
       return {
         "NAMES": row["NAMES"],
         "TOTAL HOURS": row["TOTAL HOURS"],
-        "JOB TITLE": row["JOB TITLE"]
+        "JOB TITLE": row["JOB TITLE"],
+        "CLOCK IN": row["CLOCK IN"],
+        "CLOCK OUT": row["CLOCK OUT"]
       };
     });
 
@@ -253,13 +257,21 @@ function addTable1Row(map, row) {
   const key = name.toLowerCase();
   const hours = getHours(row);
   const job = cleanJobTitle(get(row, "Job"));
+  const timeIn = get(row, "Time In");
+  const timeOut = get(row, "Time Out");
+  const inMin = timeToMinutes(timeIn);
+  const outMin = timeToMinutes(timeOut);
 
   if (!map.has(key)) {
     map.set(key, {
       name: name,
       hours: 0,
       jobs: new Set(),
-      is3D: is3D
+      is3D: is3D,
+      inMin: Infinity,
+      outMin: -Infinity,
+      clockIn: "",
+      clockOut: ""
     });
   }
 
@@ -267,6 +279,9 @@ function addTable1Row(map, row) {
   item.hours += hours;
   item.is3D = item.is3D || is3D;
   if (job) item.jobs.add(job);
+  // Display the day's earliest clock-in and latest clock-out for the person.
+  if (inMin !== 99999 && inMin < item.inMin) { item.inMin = inMin; item.clockIn = timeIn; }
+  if (outMin !== 99999 && outMin > item.outMin) { item.outMin = outMin; item.clockOut = timeOut; }
 }
 
 function addTable2Row(table2, row) {
