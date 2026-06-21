@@ -172,6 +172,7 @@
     table.pool input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
     .pool-total { margin-top: 10px; font-size: 13px; color: var(--muted); }
     .pool-total b { color: var(--ink); font-variant-numeric: tabular-nums; }
+    table.pool .sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--muted); }
 
     .hidden { display: none; }
   </style>
@@ -830,11 +831,17 @@
       rows.forEach(function (row, i) {
         var tr = document.createElement("tr");
 
+        // Name, with the clock-in/out window in gray underneath (display only).
         var nameTd = document.createElement("td");
-        nameTd.textContent = row["FIRST NAMES"];
+        nameTd.appendChild(document.createTextNode(row["FIRST NAMES"]));
+        var times = clockRange(row["CLOCK IN TIME"], row["CLOCK OUT TIME"]);
+        if (times) nameTd.appendChild(subLine(times));
+
+        // Hours, with the job title in gray underneath (display only).
         var hoursTd = document.createElement("td");
         hoursTd.className = "num";
-        hoursTd.textContent = row["TOTAL HOURS"];
+        hoursTd.appendChild(document.createTextNode(row["TOTAL HOURS"]));
+        if (row["JOB TITLE"]) hoursTd.appendChild(subLine(row["JOB TITLE"]));
 
         tr.appendChild(nameTd);
         tr.appendChild(hoursTd);
@@ -856,6 +863,20 @@
         input.addEventListener("input", function () { updatePoolTotal(prefix, rows.length); });
       });
       updatePoolTotal(prefix, rows.length);
+    }
+
+    function subLine(text) {
+      var span = document.createElement("span");
+      span.className = "sub";
+      span.textContent = text;
+      return span;
+    }
+
+    function clockRange(timeIn, timeOut) {
+      var a = String(timeIn || "").trim();
+      var b = String(timeOut || "").trim();
+      if (a && b) return a + " – " + b;
+      return a || b || "";
     }
 
     function moneyCell(id) {
