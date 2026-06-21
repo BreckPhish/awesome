@@ -19,6 +19,9 @@
 // Entry point
 // ----------------------------------------------------------------------------
 
+// 2:00 PM cutoff used to split Table 2 into lunch / dinner.
+const TWO_PM_MINUTES = 14 * 60;
+
 await main();
 
 async function main() {
@@ -135,6 +138,7 @@ function emptyResults() {
   return {
     table1: [],
     table2: [],
+    table2SplitIndex: 0,
     unmatched: [],
     excluded: [],
     sourceHours: 0,
@@ -210,12 +214,19 @@ function buildTables(rows) {
     return a._sort - b._sort;
   });
 
+  // Everyone who clocked in before 2:00 PM sorts above the gap; everyone at or
+  // after 2:00 PM (and any unparseable times) falls below it.
+  const splitIndex = table2.filter(function (row) {
+    return row._sort < TWO_PM_MINUTES;
+  }).length;
+
   const visibleTable2 = table2.map(function (row) {
     return {
       "FIRST NAMES": row["FIRST NAMES"],
       "TOTAL HOURS": row["TOTAL HOURS"],
       "CLOCK IN TIME": row["CLOCK IN TIME"],
-      "CLOCK OUT TIME": row["CLOCK OUT TIME"]
+      "CLOCK OUT TIME": row["CLOCK OUT TIME"],
+      "JOB TITLE": row["JOB TITLE"]
     };
   });
 
@@ -226,6 +237,7 @@ function buildTables(rows) {
   return {
     table1: table1,
     table2: visibleTable2,
+    table2SplitIndex: splitIndex,
     unmatched: unmatched,
     excluded: excluded,
     sourceHours: sourceHours,
@@ -263,15 +275,24 @@ function addTable2Row(table2, row) {
     "TOTAL HOURS": formatHours(getHours(row)),
     "CLOCK IN TIME": get(row, "Time In"),
     "CLOCK OUT TIME": get(row, "Time Out"),
+    "JOB TITLE": cleanJobTitle(get(row, "Job")),
     "_sort": timeToMinutes(get(row, "Time In"))
   });
 }
 
+// Profiles that should never reach any table: online ordering, Toast default
+// profiles, hosts, managers (incl. hourly shift manager), and chefs.
 function isAlwaysExcluded(row) {
   const job = get(row, "Job");
+  const employee = get(row, "Employee");
+  const hay = job + " " + employee;
 
-  return /hourly\s+shift\s+manager\s*\(\s*foh\s*\)/i.test(job)
-    || /hourly\s+shift\s+manager/i.test(job);
+  return /online\s*order(ing)?/i.test(hay)
+    || /toast\s*default/i.test(hay)
+    || /\bdefault\b/i.test(job)
+    || /\bhost(ess)?\b/i.test(job)
+    || /\bmanager\b/i.test(job)
+    || /\bchef\b/i.test(job);
 }
 
 function includeTable1(row) {
@@ -450,6 +471,27 @@ function toTSV(rows, includeHeaders) {
   return lines.join("\n");
 }
 
+// Table 2 TSV: inserts a blank gap row at the 2:00 PM split so the pasted block
+// keeps the same before/after (lunch/dinner) separation as the on-screen table.
+function toTSV2(rows, splitIndex, includeHeaders) {
+  if (!rows.length) return "";
+
+  const headers = Object.keys(rows[0]);
+  const showGap = splitIndex > 0 && splitIndex < rows.length;
+  const lines = [];
+
+  if (includeHeaders) lines.push(headers.join("\t"));
+
+  rows.forEach(function (row, index) {
+    if (showGap && index === splitIndex) lines.push("");
+    lines.push(headers.map(function (header) {
+      return cleanCell(row[header]);
+    }).join("\t"));
+  });
+
+  return lines.join("\n");
+}
+
 function cleanCell(value) {
   return String(value === undefined || value === null ? "" : value)
     .replace(/\t/g, " ")
@@ -533,12 +575,20 @@ async function copyMenu(processed, qa) {
       ? "QA passed. Pick what to copy, then paste into your spreadsheet."
       : "QA warning: totals differ by " + formatHours(qa.delta) + " h. Pick what to copy.";
 
+    const split = processed.table2SplitIndex || 0;
+    const lunch = processed.table2.slice(0, split);
+    const dinner = processed.table2.slice(split);
+
+    // Each action returns the TSV text to copy. Table 2 keeps the 2:00 PM gap
+    // (toTSV2) and offers lunch-only / dinner-only copies.
     const actions = [
-      { label: "Table 1 — rows only", rows: processed.table1, headers: false },
-      { label: "Table 1 — with headers", rows: processed.table1, headers: true },
-      { label: "Table 2 — rows only", rows: processed.table2, headers: false },
-      { label: "Table 2 — with headers", rows: processed.table2, headers: true },
-      { label: "Unmatched — with headers", rows: processed.unmatched, headers: true }
+      { label: "Table 1 — rows only", text: function () { return toTSV(processed.table1, false); } },
+      { label: "Table 1 — with headers", text: function () { return toTSV(processed.table1, true); } },
+      { label: "Table 2 — rows only (2 PM gap)", text: function () { return toTSV2(processed.table2, split, false); } },
+      { label: "Table 2 — with headers (2 PM gap)", text: function () { return toTSV2(processed.table2, split, true); } },
+      { label: "Table 2 — Lunch only (before 2 PM)", text: function () { return toTSV(lunch, true); } },
+      { label: "Table 2 — Dinner only (2 PM & after)", text: function () { return toTSV(dinner, true); } },
+      { label: "Unmatched — with headers", text: function () { return toTSV(processed.unmatched, true); } }
     ];
 
     actions.forEach(function (a) { menu.addAction(a.label); });
@@ -555,7 +605,7 @@ async function copyMenu(processed, qa) {
     }
 
     const chosen = actions[choice];
-    const text = toTSV(chosen.rows, chosen.headers);
+    const text = chosen.text();
 
     if (!text) {
       await toast("Nothing to copy.");
@@ -629,6 +679,8 @@ function buildHTML(processed, qa) {
   th, td { border:1px solid var(--line); padding:7px 8px; text-align:left; vertical-align:top; }
   th { background:#f1f3f4; font-weight:750; }
   td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.gap-row td { background:#fff4d6; color:var(--warn); font-weight:750;
+    text-align:center; letter-spacing:.03em; }
 </style>
 </head>
 <body>
@@ -648,18 +700,18 @@ function buildHTML(processed, qa) {
 
   <div class="panel">
     <h2>Table 2 — FOH tipped roles</h2>
-    ${renderHTMLTable(processed.table2)}
+    ${renderHTMLTable2(processed.table2, processed.table2SplitIndex)}
   </div>
 
   <div class="panel">
     <h2>Unmatched rows</h2>
-    <p class="muted">Rows that did not meet Table 1 or Table 2 rules. Hourly Shift Manager rows are excluded before this section.</p>
+    <p class="muted">Rows that did not meet Table 1 or Table 2 rules. Excluded profiles are removed before this section.</p>
     ${renderHTMLTable(processed.unmatched)}
   </div>
 
   <div class="panel">
     <h2>Excluded rows</h2>
-    <p class="muted">Hourly Shift Manager rows are shown only for QA and are not in either copy/paste table.</p>
+    <p class="muted">Online ordering, Toast default, Host, Manager, and Chef rows are shown only for QA and are not in either copy/paste table.</p>
     ${renderHTMLTable(processed.excluded)}
   </div>
 </body>
@@ -681,6 +733,33 @@ function renderHTMLTable(rows) {
       return "<td" + cls + ">" + escapeHTML(row[h]) + "</td>";
     }).join("");
     return "<tr>" + tds + "</tr>";
+  }).join("");
+
+  return "<table><thead><tr>" + thead + "</tr></thead><tbody>" + tbody + "</tbody></table>";
+}
+
+// Same as renderHTMLTable, but drops a "2:00 PM" divider row at the split.
+function renderHTMLTable2(rows, splitIndex) {
+  if (!rows || !rows.length) return '<p class="muted">No rows.</p>';
+
+  const headers = Object.keys(rows[0]);
+  const showGap = splitIndex > 0 && splitIndex < rows.length;
+
+  const thead = headers.map(function (h) {
+    const cls = /hours/i.test(h) ? ' class="num"' : "";
+    return "<th" + cls + ">" + escapeHTML(h) + "</th>";
+  }).join("");
+
+  const gapRow = '<tr class="gap-row"><td colspan="' + headers.length +
+    '">2:00 PM — clock-in cutoff</td></tr>';
+
+  const tbody = rows.map(function (row, index) {
+    const tds = headers.map(function (h) {
+      const cls = /hours/i.test(h) ? ' class="num"' : "";
+      return "<td" + cls + ">" + escapeHTML(row[h]) + "</td>";
+    }).join("");
+    const prefix = (showGap && index === splitIndex) ? gapRow : "";
+    return prefix + "<tr>" + tds + "</tr>";
   }).join("");
 
   return "<table><thead><tr>" + thead + "</tr></thead><tbody>" + tbody + "</tbody></table>";
