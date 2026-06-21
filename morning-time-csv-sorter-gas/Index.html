@@ -77,6 +77,11 @@
 
     .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
 
+    .col-copy { margin: 2px 0 10px; }
+    .col-copy-label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 2px; }
+    .col-buttons { margin: 4px 0 0; }
+    button.col-btn { font-size: 12px; padding: 6px 9px; }
+
     button {
       appearance: none;
       border: 1px solid var(--accent);
@@ -160,6 +165,7 @@
           <li><strong>Table 2:</strong> Servers, Bartenders, Bar Lead, and Trainer. Trainee is excluded.</li>
           <li><strong>Table 2 layout:</strong> not combined; sorted by clock-in time with a gap row marking the <code>2:00 PM</code> cutoff &mdash; everyone above clocked in before 2 PM, everyone below at or after 2 PM. Column 5 shows each row&rsquo;s job title.</li>
           <li><strong>Always excluded:</strong> Online ordering profiles, Toast default profiles, Hosts, Managers (including Hourly Shift Manager), and Chefs never appear in Table 1, Table 2, or unmatched rows.</li>
+          <li><strong>Column copy:</strong> each table has a button per column to copy just that column&rsquo;s values. Table 2&rsquo;s column buttons are split into Lunch (before 2 PM) and Dinner (2 PM &amp; after) so each column copies separately per service.</li>
           <li><strong>Hours source:</strong> uses <code>Payable Hours</code> first, then falls back to <code>Total Hours</code>.</li>
         </ul>
       </details>
@@ -186,6 +192,10 @@
           <button id="copy-t1-rows" type="button">Copy rows only</button>
           <button id="copy-t1-headers" type="button" class="secondary">Copy with headers</button>
         </div>
+        <div class="col-copy">
+          <span class="col-copy-label">Copy a single column (values only, top to bottom):</span>
+          <div id="table1-cols" class="button-row col-buttons"></div>
+        </div>
         <div id="table1-view"></div>
         <h3>Paste-ready TSV</h3>
         <textarea id="table1-tsv" readonly></textarea>
@@ -196,6 +206,12 @@
         <div class="button-row">
           <button id="copy-t2-rows" type="button">Copy rows only</button>
           <button id="copy-t2-headers" type="button" class="secondary">Copy with headers</button>
+        </div>
+        <div class="col-copy">
+          <span class="col-copy-label">Copy a single column &mdash; Lunch (clocked in before 2 PM):</span>
+          <div id="table2-cols-lunch" class="button-row col-buttons"></div>
+          <span class="col-copy-label">Copy a single column &mdash; Dinner (clocked in 2 PM &amp; after):</span>
+          <div id="table2-cols-dinner" class="button-row col-buttons"></div>
         </div>
         <div id="table2-view"></div>
         <h3>Paste-ready TSV</h3>
@@ -238,6 +254,9 @@
         qaMessage: document.getElementById("qa-message"),
         table1View: document.getElementById("table1-view"),
         table2View: document.getElementById("table2-view"),
+        table1Cols: document.getElementById("table1-cols"),
+        table2ColsLunch: document.getElementById("table2-cols-lunch"),
+        table2ColsDinner: document.getElementById("table2-cols-dinner"),
         unmatchedView: document.getElementById("unmatched-view"),
         excludedView: document.getElementById("excluded-view"),
         table1TSV: document.getElementById("table1-tsv"),
@@ -618,6 +637,17 @@
       renderTable(refs.unmatchedView, processed.unmatched);
       renderTable(refs.excludedView, processed.excluded);
 
+      // Per-column copy buttons. Table 2's columns are split by the 2 PM gap
+      // so each column can be copied separately for lunch and for dinner.
+      var t1Headers = processed.table1.length ? Object.keys(processed.table1[0]) : [];
+      var t2Headers = processed.table2.length ? Object.keys(processed.table2[0]) : [];
+      var lunchRows = processed.table2.slice(0, processed.table2SplitIndex);
+      var dinnerRows = processed.table2.slice(processed.table2SplitIndex);
+
+      buildColumnCopyButtons(refs.table1Cols, processed.table1, t1Headers, "");
+      buildColumnCopyButtons(refs.table2ColsLunch, lunchRows, t2Headers, "Lunch");
+      buildColumnCopyButtons(refs.table2ColsDinner, dinnerRows, t2Headers, "Dinner");
+
       refs.table1TSV.value = toTSV(processed.table1, false);
       refs.table2TSV.value = toTSV2(processed.table2, processed.table2SplitIndex, false);
       refs.unmatchedTSV.value = toTSV(processed.unmatched, true);
@@ -751,6 +781,44 @@
       table.appendChild(thead);
       table.appendChild(tbody);
       target.appendChild(table);
+    }
+
+    // Render one copy button per column. Each button copies that column's
+    // values top-to-bottom (newline-separated) so they paste into a single
+    // spreadsheet column. labelPrefix distinguishes Table 2's lunch/dinner sets.
+    function buildColumnCopyButtons(container, rows, headers, labelPrefix) {
+      container.innerHTML = "";
+
+      if (!headers || !headers.length) {
+        return;
+      }
+
+      if (!rows.length) {
+        var none = document.createElement("span");
+        none.className = "small";
+        none.textContent = "No rows.";
+        container.appendChild(none);
+        return;
+      }
+
+      headers.forEach(function (header) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary col-btn";
+        button.textContent = header;
+        button.addEventListener("click", function () {
+          var note = (labelPrefix ? labelPrefix + " " : "") + header +
+            " column copied (" + rows.length + " rows).";
+          copyText(columnList(rows, header), note);
+        });
+        container.appendChild(button);
+      });
+    }
+
+    function columnList(rows, key) {
+      return rows.map(function (row) {
+        return cleanCell(row[key]);
+      }).join("\n");
     }
 
     function toTSV(rows, includeHeaders) {
