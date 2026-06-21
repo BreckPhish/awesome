@@ -163,9 +163,9 @@
           <li><strong>Table 1 names:</strong> first names only; Three Daughters rows get <code> 3D</code> after the name and sort first.</li>
           <li><strong>Table 1 hours:</strong> combined by displayed first name.</li>
           <li><strong>Table 2:</strong> Servers, Bartenders, Bar Lead, and Trainer. Trainee is excluded.</li>
-          <li><strong>Table 2 layout:</strong> not combined; sorted by clock-in time with a gap row marking the <code>2:00 PM</code> cutoff &mdash; everyone above clocked in before 2 PM, everyone below at or after 2 PM. Column 5 shows each row&rsquo;s job title.</li>
+          <li><strong>Table 2 layout:</strong> not combined; sorted by clock-in time and labeled as two independent FOH cash tip pools &mdash; the <strong>AM tip pool</strong> (clock-in before <code>2:00 PM</code>) and the <strong>PM tip pool</strong> (clock-in 2:00 PM &amp; after). Column 5 shows each row&rsquo;s job title.</li>
           <li><strong>Always excluded:</strong> Online ordering profiles, Toast default profiles, Hosts, Managers (including Hourly Shift Manager), and Chefs never appear in Table 1, Table 2, or unmatched rows.</li>
-          <li><strong>Column copy:</strong> each table has a button per column to copy just that column&rsquo;s values. Table 2&rsquo;s column buttons are split into Lunch (before 2 PM) and Dinner (2 PM &amp; after) so each column copies separately per service.</li>
+          <li><strong>Column copy:</strong> each table has a button per column to copy just that column&rsquo;s values. Table 2&rsquo;s column buttons are split into the AM tip pool (before 2 PM) and PM tip pool (2 PM &amp; after) so each column copies separately per pool.</li>
           <li><strong>Hours source:</strong> uses <code>Payable Hours</code> first, then falls back to <code>Total Hours</code>.</li>
         </ul>
       </details>
@@ -202,15 +202,17 @@
       </div>
 
       <div class="panel">
-        <h2>Table 2 &mdash; FOH tipped roles</h2>
+        <h2>Table 2 &mdash; FOH cash tip pools</h2>
+        <p class="small">Split into the <strong>AM tip pool</strong> (clock-in before 2 PM) and <strong>PM tip pool</strong> (clock-in 2 PM &amp; after). The two pools are independent &mdash; copy each into its own table.</p>
         <div class="button-row">
-          <button id="copy-t2-rows" type="button">Copy rows only</button>
-          <button id="copy-t2-headers" type="button" class="secondary">Copy with headers</button>
+          <button id="copy-t2-am" type="button">Copy AM tip pool</button>
+          <button id="copy-t2-pm" type="button">Copy PM tip pool</button>
+          <button id="copy-t2-headers" type="button" class="secondary">Copy both with headers</button>
         </div>
         <div class="col-copy">
-          <span class="col-copy-label">Copy a single column &mdash; Lunch (clocked in before 2 PM):</span>
+          <span class="col-copy-label">AM tip pool &mdash; copy a single column (clock-in before 2 PM):</span>
           <div id="table2-cols-lunch" class="button-row col-buttons"></div>
-          <span class="col-copy-label">Copy a single column &mdash; Dinner (clocked in 2 PM &amp; after):</span>
+          <span class="col-copy-label">PM tip pool &mdash; copy a single column (clock-in 2 PM &amp; after):</span>
           <div id="table2-cols-dinner" class="button-row col-buttons"></div>
         </div>
         <div id="table2-view"></div>
@@ -272,11 +274,16 @@
       document.getElementById("copy-t1-headers").addEventListener("click", function () {
         copyText(toTSV(latest.table1, true), "Table 1 with headers copied.");
       });
-      document.getElementById("copy-t2-rows").addEventListener("click", function () {
-        copyText(toTSV2(latest.table2, latest.table2SplitIndex, false), "Table 2 rows copied.");
+      document.getElementById("copy-t2-am").addEventListener("click", function () {
+        var split = latest.table2SplitIndex || 0;
+        copyText(toTSV(latest.table2.slice(0, split), false), "AM tip pool rows copied.");
+      });
+      document.getElementById("copy-t2-pm").addEventListener("click", function () {
+        var split = latest.table2SplitIndex || 0;
+        copyText(toTSV(latest.table2.slice(split), false), "PM tip pool rows copied.");
       });
       document.getElementById("copy-t2-headers").addEventListener("click", function () {
-        copyText(toTSV2(latest.table2, latest.table2SplitIndex, true), "Table 2 with headers copied.");
+        copyText(toTSV2(latest.table2, latest.table2SplitIndex, true), "Both tip pools with headers copied.");
       });
       document.getElementById("copy-unmatched").addEventListener("click", function () {
         copyText(toTSV(latest.unmatched, true), "Unmatched rows copied.");
@@ -638,15 +645,15 @@
       renderTable(refs.excludedView, processed.excluded);
 
       // Per-column copy buttons. Table 2's columns are split by the 2 PM gap
-      // so each column can be copied separately for lunch and for dinner.
+      // into the AM tip pool (before 2 PM) and PM tip pool (2 PM & after).
       var t1Headers = processed.table1.length ? Object.keys(processed.table1[0]) : [];
       var t2Headers = processed.table2.length ? Object.keys(processed.table2[0]) : [];
-      var lunchRows = processed.table2.slice(0, processed.table2SplitIndex);
-      var dinnerRows = processed.table2.slice(processed.table2SplitIndex);
+      var amRows = processed.table2.slice(0, processed.table2SplitIndex);
+      var pmRows = processed.table2.slice(processed.table2SplitIndex);
 
       buildColumnCopyButtons(refs.table1Cols, processed.table1, t1Headers, "");
-      buildColumnCopyButtons(refs.table2ColsLunch, lunchRows, t2Headers, "Lunch");
-      buildColumnCopyButtons(refs.table2ColsDinner, dinnerRows, t2Headers, "Dinner");
+      buildColumnCopyButtons(refs.table2ColsLunch, amRows, t2Headers, "AM tip pool");
+      buildColumnCopyButtons(refs.table2ColsDinner, pmRows, t2Headers, "PM tip pool");
 
       refs.table1TSV.value = toTSV(processed.table1, false);
       refs.table2TSV.value = toTSV2(processed.table2, processed.table2SplitIndex, false);
@@ -731,7 +738,8 @@
       target.appendChild(table);
     }
 
-    // Same as renderTable, but drops a "2:00 PM" divider row at the split.
+    // Same as renderTable, but labels the AM tip pool (before 2 PM) and the
+    // PM tip pool (2 PM & after) as separate banner rows at the split.
     function renderTable2(target, rows, splitIndex) {
       target.innerHTML = "";
 
@@ -741,7 +749,6 @@
       }
 
       var headers = Object.keys(rows[0]);
-      var showGap = splitIndex > 0 && splitIndex < rows.length;
 
       var table = document.createElement("table");
       var thead = document.createElement("thead");
@@ -757,15 +764,22 @@
 
       thead.appendChild(trHead);
 
+      function addPoolLabel(text) {
+        var tr = document.createElement("tr");
+        tr.className = "gap-row";
+        var td = document.createElement("td");
+        td.colSpan = headers.length;
+        td.textContent = text;
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+
       rows.forEach(function (row, index) {
-        if (showGap && index === splitIndex) {
-          var gapTr = document.createElement("tr");
-          gapTr.className = "gap-row";
-          var gapTd = document.createElement("td");
-          gapTd.colSpan = headers.length;
-          gapTd.textContent = "2:00 PM — clock-in cutoff";
-          gapTr.appendChild(gapTd);
-          tbody.appendChild(gapTr);
+        if (index === 0 && splitIndex > 0) {
+          addPoolLabel("AM TIP POOL — clock-in before 2:00 PM");
+        }
+        if (index === splitIndex && splitIndex < rows.length) {
+          addPoolLabel("PM TIP POOL — clock-in 2:00 PM & after");
         }
 
         var tr = document.createElement("tr");

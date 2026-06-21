@@ -576,18 +576,18 @@ async function copyMenu(processed, qa) {
       : "QA warning: totals differ by " + formatHours(qa.delta) + " h. Pick what to copy.";
 
     const split = processed.table2SplitIndex || 0;
-    const lunch = processed.table2.slice(0, split);
-    const dinner = processed.table2.slice(split);
+    const amPool = processed.table2.slice(0, split);
+    const pmPool = processed.table2.slice(split);
 
-    // Each action returns the TSV text to copy. Table 2 keeps the 2:00 PM gap
-    // (toTSV2) and offers lunch-only / dinner-only copies.
+    // Each action returns the TSV text to copy. Table 2 is the FOH cash tip
+    // pools: the AM pool (before 2 PM) and PM pool (2 PM & after) are
+    // independent, so each can be copied on its own.
     const actions = [
       { label: "Table 1 — rows only", text: function () { return toTSV(processed.table1, false); } },
       { label: "Table 1 — with headers", text: function () { return toTSV(processed.table1, true); } },
-      { label: "Table 2 — rows only (2 PM gap)", text: function () { return toTSV2(processed.table2, split, false); } },
-      { label: "Table 2 — with headers (2 PM gap)", text: function () { return toTSV2(processed.table2, split, true); } },
-      { label: "Table 2 — Lunch only (before 2 PM)", text: function () { return toTSV(lunch, true); } },
-      { label: "Table 2 — Dinner only (2 PM & after)", text: function () { return toTSV(dinner, true); } },
+      { label: "Table 2 — AM tip pool (before 2 PM)", text: function () { return toTSV(amPool, false); } },
+      { label: "Table 2 — PM tip pool (2 PM & after)", text: function () { return toTSV(pmPool, false); } },
+      { label: "Table 2 — both pools with headers", text: function () { return toTSV2(processed.table2, split, true); } },
       { label: "Unmatched — with headers", text: function () { return toTSV(processed.unmatched, true); } }
     ];
 
@@ -699,7 +699,8 @@ function buildHTML(processed, qa) {
   </div>
 
   <div class="panel">
-    <h2>Table 2 — FOH tipped roles</h2>
+    <h2>Table 2 — FOH cash tip pools</h2>
+    <p class="muted">AM tip pool (clock-in before 2 PM) and PM tip pool (2 PM &amp; after) are independent — copy each into its own table.</p>
     ${renderHTMLTable2(processed.table2, processed.table2SplitIndex)}
   </div>
 
@@ -738,27 +739,32 @@ function renderHTMLTable(rows) {
   return "<table><thead><tr>" + thead + "</tr></thead><tbody>" + tbody + "</tbody></table>";
 }
 
-// Same as renderHTMLTable, but drops a "2:00 PM" divider row at the split.
+// Same as renderHTMLTable, but labels the AM tip pool (before 2 PM) and the
+// PM tip pool (2 PM & after) as banner rows at the split.
 function renderHTMLTable2(rows, splitIndex) {
   if (!rows || !rows.length) return '<p class="muted">No rows.</p>';
 
   const headers = Object.keys(rows[0]);
-  const showGap = splitIndex > 0 && splitIndex < rows.length;
 
   const thead = headers.map(function (h) {
     const cls = /hours/i.test(h) ? ' class="num"' : "";
     return "<th" + cls + ">" + escapeHTML(h) + "</th>";
   }).join("");
 
-  const gapRow = '<tr class="gap-row"><td colspan="' + headers.length +
-    '">2:00 PM — clock-in cutoff</td></tr>';
+  function poolLabel(text) {
+    return '<tr class="gap-row"><td colspan="' + headers.length + '">' + text + "</td></tr>";
+  }
 
   const tbody = rows.map(function (row, index) {
     const tds = headers.map(function (h) {
       const cls = /hours/i.test(h) ? ' class="num"' : "";
       return "<td" + cls + ">" + escapeHTML(row[h]) + "</td>";
     }).join("");
-    const prefix = (showGap && index === splitIndex) ? gapRow : "";
+
+    let prefix = "";
+    if (index === 0 && splitIndex > 0) prefix += poolLabel("AM TIP POOL — clock-in before 2:00 PM");
+    if (index === splitIndex && splitIndex < rows.length) prefix += poolLabel("PM TIP POOL — clock-in 2:00 PM &amp; after");
+
     return prefix + "<tr>" + tds + "</tr>";
   }).join("");
 
