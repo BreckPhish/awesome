@@ -288,7 +288,7 @@ function isAlwaysExcluded(row) {
   const employee = get(row, "Employee");
   const hay = job + " " + employee;
 
-  return /^\s*three\s*daughters\b/i.test(employee)
+  return /three\s*daughters/i.test(employee)
     || /online\s*order(ing)?/i.test(hay)
     || /toast\s*default/i.test(hay)
     || /\bdefault\b/i.test(job)
