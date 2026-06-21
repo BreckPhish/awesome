@@ -3,8 +3,6 @@
 <head>
   <base target="_top" />
   <meta charset="utf-8" />
-  <!-- SheetJS: builds the downloadable .xlsx that mirrors the master templates. -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <style>
     :root {
       --bg: #f6f7f8;
@@ -78,15 +76,6 @@
     }
 
     .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
-
-    .export-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 8px 0 4px; }
-    .export-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-    .export-grid input { padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
-    .cash-inputs { display: grid; gap: 6px; margin: 6px 0 4px; }
-    .cash-row { display: grid; grid-template-columns: 1fr 120px 120px; gap: 8px; align-items: center; }
-    .cash-row .cash-name { font-size: 13px; }
-    .cash-row input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
-    @media (max-width: 560px) { .cash-row { grid-template-columns: 1fr; } }
 
     .col-copy { margin: 2px 0 10px; }
     .col-copy-label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 2px; }
@@ -199,8 +188,10 @@
     <section id="results-panel" class="results-grid hidden">
       <div class="panel">
         <h2>Table 1 &mdash; BOH / bussers / 3D</h2>
+        <p class="small">&ldquo;Name + Hours&rdquo; pastes straight into the 3D template&rsquo;s Name/Hours columns; type the day&rsquo;s cash &amp; credit pool amounts into the template and its formulas compute Take Home / Paycheck.</p>
         <div class="button-row">
-          <button id="copy-t1-rows" type="button">Copy rows only</button>
+          <button id="copy-t1-namehours" type="button">Copy Name + Hours</button>
+          <button id="copy-t1-rows" type="button" class="secondary">Copy all columns</button>
           <button id="copy-t1-headers" type="button" class="secondary">Copy with headers</button>
         </div>
         <div class="col-copy">
@@ -214,10 +205,12 @@
 
       <div class="panel">
         <h2>Table 2 &mdash; FOH cash tip pools</h2>
-        <p class="small">Split into the <strong>AM tip pool</strong> (clock-in before 2 PM) and <strong>PM tip pool</strong> (clock-in 2 PM &amp; after). The two pools are independent &mdash; copy each into its own table.</p>
+        <p class="small">Split into the <strong>AM tip pool</strong> (clock-in before 2 PM) and <strong>PM tip pool</strong> (clock-in 2 PM &amp; after). The two pools are independent. Paste each pool&rsquo;s Name + Hours into its Tin Plate table, then enter each server&rsquo;s cash sales &amp; cash tips in Excel &mdash; the template formulas compute Tip Percent / Take Home.</p>
         <div class="button-row">
-          <button id="copy-t2-am" type="button">Copy AM tip pool</button>
-          <button id="copy-t2-pm" type="button">Copy PM tip pool</button>
+          <button id="copy-t2-am-namehours" type="button">Copy AM Name + Hours</button>
+          <button id="copy-t2-pm-namehours" type="button">Copy PM Name + Hours</button>
+          <button id="copy-t2-am" type="button" class="secondary">Copy AM (all columns)</button>
+          <button id="copy-t2-pm" type="button" class="secondary">Copy PM (all columns)</button>
           <button id="copy-t2-headers" type="button" class="secondary">Copy both with headers</button>
         </div>
         <div class="col-copy">
@@ -230,25 +223,6 @@
         <h3>Paste-ready TSV</h3>
         <textarea id="table2-tsv" readonly></textarea>
       </div>
-    </section>
-
-    <section id="excel-panel" class="panel hidden">
-      <h2>3. Build Excel sheets</h2>
-      <p class="small">Enter the day&rsquo;s tip amounts, then download an <code>.xlsx</code> laid out like your master templates &mdash; the formulas (Take Home, Paycheck, Tip Percent, per-hour) are built in, so it computes exactly as if you&rsquo;d filled the template by hand.</p>
-      <div class="export-grid">
-        <label>Date<input id="exp-date" type="date" /></label>
-        <label>3D Cash Tips ($)<input id="exp-3d-cash" type="number" step="0.01" min="0" placeholder="0.00" /></label>
-        <label>3D Credit Tips ($)<input id="exp-3d-credit" type="number" step="0.01" min="0" placeholder="0.00" /></label>
-      </div>
-      <h3>Tin Plate &mdash; AM servers</h3>
-      <p class="small">Enter each server&rsquo;s cash sales and cash tips (from the cash count). Leave a pool blank to skip its table.</p>
-      <div id="exp-am" class="cash-inputs"></div>
-      <h3>Tin Plate &mdash; PM servers</h3>
-      <div id="exp-pm" class="cash-inputs"></div>
-      <div class="button-row">
-        <button id="download-xlsx" type="button">Download Excel workbook</button>
-      </div>
-      <div id="exp-status" class="status good hidden"></div>
     </section>
 
     <section id="unmatched-panel" class="panel hidden">
@@ -283,13 +257,6 @@
         resultsPanel: document.getElementById("results-panel"),
         unmatchedPanel: document.getElementById("unmatched-panel"),
         excludedPanel: document.getElementById("excluded-panel"),
-        excelPanel: document.getElementById("excel-panel"),
-        expDate: document.getElementById("exp-date"),
-        exp3dCash: document.getElementById("exp-3d-cash"),
-        exp3dCredit: document.getElementById("exp-3d-credit"),
-        expAm: document.getElementById("exp-am"),
-        expPm: document.getElementById("exp-pm"),
-        expStatus: document.getElementById("exp-status"),
         qaMessage: document.getElementById("qa-message"),
         table1View: document.getElementById("table1-view"),
         table2View: document.getElementById("table2-view"),
@@ -322,10 +289,20 @@
       document.getElementById("copy-t2-headers").addEventListener("click", function () {
         copyText(toTSV2(latest.table2, latest.table2SplitIndex, true), "Both tip pools with headers copied.");
       });
+      document.getElementById("copy-t1-namehours").addEventListener("click", function () {
+        copyText(twoColumnTSV(latest.table1, "NAMES", "TOTAL HOURS"), "Table 1 Name + Hours copied.");
+      });
+      document.getElementById("copy-t2-am-namehours").addEventListener("click", function () {
+        var split = latest.table2SplitIndex || 0;
+        copyText(twoColumnTSV(latest.table2.slice(0, split), "FIRST NAMES", "TOTAL HOURS"), "AM pool Name + Hours copied.");
+      });
+      document.getElementById("copy-t2-pm-namehours").addEventListener("click", function () {
+        var split = latest.table2SplitIndex || 0;
+        copyText(twoColumnTSV(latest.table2.slice(split), "FIRST NAMES", "TOTAL HOURS"), "PM pool Name + Hours copied.");
+      });
       document.getElementById("copy-unmatched").addEventListener("click", function () {
         copyText(toTSV(latest.unmatched, true), "Unmatched rows copied.");
       });
-      document.getElementById("download-xlsx").addEventListener("click", downloadWorkbook);
     });
 
     function emptyResults() {
@@ -674,7 +651,6 @@
     function renderAll(processed, sourceRowCount) {
       refs.qaPanel.classList.remove("hidden");
       refs.resultsPanel.classList.remove("hidden");
-      refs.excelPanel.classList.remove("hidden");
       refs.unmatchedPanel.classList.remove("hidden");
       refs.excludedPanel.classList.remove("hidden");
 
@@ -693,8 +669,6 @@
       buildColumnCopyButtons(refs.table1Cols, processed.table1, t1Headers, "");
       buildColumnCopyButtons(refs.table2ColsLunch, amRows, t2Headers, "AM tip pool");
       buildColumnCopyButtons(refs.table2ColsDinner, pmRows, t2Headers, "PM tip pool");
-
-      renderExportPanel(amRows, pmRows);
 
       refs.table1TSV.value = toTSV(processed.table1, false);
       refs.table2TSV.value = toTSV2(processed.table2, processed.table2SplitIndex, false);
@@ -729,7 +703,6 @@
       if (!refs.qaPanel) return;
       refs.qaPanel.classList.add("hidden");
       refs.resultsPanel.classList.add("hidden");
-      refs.excelPanel.classList.add("hidden");
       refs.unmatchedPanel.classList.add("hidden");
       refs.excludedPanel.classList.add("hidden");
     }
@@ -964,214 +937,11 @@
       if (type === "error") refs.status.classList.add("error");
     }
 
-    // ----------------------------------------------------------------------
-    // Excel export — builds an .xlsx that mirrors the master templates.
-    // ----------------------------------------------------------------------
-
-    // Renders the per-server Cash Sales / Cash Tips inputs for each pool and
-    // defaults the date to today.
-    function renderExportPanel(amRows, pmRows) {
-      if (!refs.expDate.value) {
-        var now = new Date();
-        var iso = now.getFullYear() + "-" +
-          String(now.getMonth() + 1).padStart(2, "0") + "-" +
-          String(now.getDate()).padStart(2, "0");
-        refs.expDate.value = iso;
-      }
-      renderCashInputs(refs.expAm, amRows, "am");
-      renderCashInputs(refs.expPm, pmRows, "pm");
-      refs.expStatus.classList.add("hidden");
-    }
-
-    function renderCashInputs(container, servers, prefix) {
-      container.innerHTML = "";
-
-      if (!servers.length) {
-        var none = document.createElement("p");
-        none.className = "small";
-        none.textContent = "No servers in this pool.";
-        container.appendChild(none);
-        return;
-      }
-
-      servers.forEach(function (server, index) {
-        var row = document.createElement("div");
-        row.className = "cash-row";
-
-        var name = document.createElement("span");
-        name.className = "cash-name";
-        name.textContent = server["FIRST NAMES"] + " (" + server["TOTAL HOURS"] + " h)";
-
-        var sales = document.createElement("input");
-        sales.type = "number"; sales.step = "0.01"; sales.min = "0";
-        sales.placeholder = "cash sales";
-        sales.id = prefix + "-sales-" + index;
-
-        var tips = document.createElement("input");
-        tips.type = "number"; tips.step = "0.01"; tips.min = "0";
-        tips.placeholder = "cash tips";
-        tips.id = prefix + "-tips-" + index;
-
-        row.appendChild(name);
-        row.appendChild(sales);
-        row.appendChild(tips);
-        container.appendChild(row);
-      });
-    }
-
-    function downloadWorkbook() {
-      if (typeof XLSX === "undefined") {
-        setExpStatus("The spreadsheet library didn't load (network may be blocked). Use the copy/paste tables instead.", true);
-        return;
-      }
-
-      var dateStr = formatDateMDY(refs.expDate.value);
-      var cash = numberOrZero(refs.exp3dCash.value);
-      var credit = numberOrZero(refs.exp3dCredit.value);
-
-      var split = latest.table2SplitIndex || 0;
-      var am = latest.table2.slice(0, split).map(function (s, i) { return readServer("am", i, s); });
-      var pm = latest.table2.slice(split).map(function (s, i) { return readServer("pm", i, s); });
-
-      var wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, build3DSheet(latest.table1, dateStr, cash, credit), "3D Tips");
-      XLSX.utils.book_append_sheet(wb, buildTinPlateSheet(am, pm, dateStr), "Tin Plate Cash");
-
-      var fname = "Tips_" + (refs.expDate.value || "day") + ".xlsx";
-      XLSX.writeFile(wb, fname);
-      setExpStatus("Downloaded " + fname + ".", false);
-    }
-
-    function readServer(prefix, index, server) {
-      return {
-        name: server["FIRST NAMES"],
-        hours: parseFloat(server["TOTAL HOURS"]) || 0,
-        cashSales: numberOrBlank(document.getElementById(prefix + "-sales-" + index).value),
-        cashTips: numberOrBlank(document.getElementById(prefix + "-tips-" + index).value)
-      };
-    }
-
-    // ----- worksheet builders (cell objects with live formulas) -----
-
-    // Cell markers: F("...") = formula, everything else is a literal value.
-    function F(formula) { return { __f: formula }; }
-
-    function makeCell(value) {
-      if (value && value.__f) return { t: "n", f: value.__f };
-      if (typeof value === "number") return { t: "n", v: value };
-      if (value === null || value === undefined || value === "") return null;
-      return { t: "s", v: String(value) };
-    }
-
-    function aoaToSheet(aoa) {
-      var ws = {};
-      var maxCol = 0;
-      for (var r = 0; r < aoa.length; r++) {
-        var rowArr = aoa[r] || [];
-        for (var c = 0; c < rowArr.length; c++) {
-          var cell = makeCell(rowArr[c]);
-          if (cell) ws[XLSX.utils.encode_cell({ r: r, c: c })] = cell;
-          if (c + 1 > maxCol) maxCol = c + 1;
-        }
-      }
-      ws["!ref"] = XLSX.utils.encode_range({
-        s: { r: 0, c: 0 },
-        e: { r: Math.max(aoa.length - 1, 0), c: Math.max(maxCol - 1, 0) }
-      });
-      return ws;
-    }
-
-    // 3D Tips: one daily table (BOH + 3D), one cash pool + one credit pool.
-    function build3DSheet(table1, dateStr, cash, credit) {
-      var n = table1.length;
-      var totalRow = 3 + n;          // Excel row of the Total: line
-      var perHourRow = totalRow + 1; // Cash/Credit Per Hour line
-      var lastPerson = 2 + n;        // Excel row of the last person
-
-      var aoa = [];
-      aoa.push(["Date:", "Name", "Hours Worked", "Cash Tips", "Take Home Amount", "Credit Tips", "Paycheck Amount"]);
-      // Pool row: date + cash (D2) + credit (F2); E2 computes off the blank C2.
-      aoa.push([dateStr, "", "", cash, F("$E$" + perHourRow + "*C2"), credit]);
-
-      for (var i = 0; i < n; i++) {
-        var er = 3 + i;
-        aoa.push([
-          "", table1[i]["NAMES"], parseFloat(table1[i]["TOTAL HOURS"]) || 0, "",
-          F("$E$" + perHourRow + "*C" + er), "",
-          F("($G$" + perHourRow + "*C" + er + ")+E" + er)
-        ]);
-      }
-
-      aoa.push(["Total:", "", F("SUM(C3:C" + lastPerson + ")"), F("D2"), "", F("F2")]);
-      aoa.push(["", "", "", "Cash Per Hour", F("D" + totalRow + "/C" + totalRow),
-        "Credit Per Hour", F("F" + totalRow + "/C" + totalRow)]);
-
-      return aoaToSheet(aoa);
-    }
-
-    // Tin Plate: AM block then PM block, each with per-server cash sales/tips.
-    function buildTinPlateSheet(amServers, pmServers, dateStr) {
-      var aoa = [];
-
-      function addBlock(label, servers) {
-        if (!servers.length) return;
-        var headerRow = aoa.length + 1; // 1-based Excel row of this header
-        var firstPerson = headerRow + 1;
-        var n = servers.length;
-        var totalRow = firstPerson + n; // Total: directly after the people
-
-        aoa.push([label, "Name", "Hours Worked", "Cash Sales", "Cash Tips", "Tip Percent", "Take Home Amount"]);
-
-        for (var i = 0; i < n; i++) {
-          var er = firstPerson + i;
-          var s = servers[i];
-          aoa.push([
-            dateStr, s.name, s.hours,
-            s.cashSales === "" ? "" : s.cashSales,
-            s.cashTips === "" ? "" : s.cashTips,
-            F("E" + er + "/D" + er),
-            F("H" + totalRow + "*C" + er)
-          ]);
-        }
-
-        var rng = function (col) { return "SUM(" + col + firstPerson + ":" + col + (totalRow - 1) + ")"; };
-        aoa.push([
-          "Total:", "", F(rng("C")), F(rng("D")), F(rng("E")),
-          F("E" + totalRow + "/D" + totalRow), "Per Hour:", F("E" + totalRow + "/C" + totalRow)
-        ]);
-      }
-
-      addBlock("Date: AM", amServers);
-      if (amServers.length && pmServers.length) aoa.push([]); // blank gap between blocks
-      addBlock("Date: PM", pmServers);
-
-      if (!aoa.length) aoa.push(["No FOH servers in this CSV."]);
-      return aoaToSheet(aoa);
-    }
-
-    function numberOrZero(value) {
-      var n = parseFloat(String(value || "").replace(/,/g, ""));
-      return Number.isFinite(n) ? n : 0;
-    }
-
-    function numberOrBlank(value) {
-      var raw = String(value == null ? "" : value).trim();
-      if (raw === "") return "";
-      var n = parseFloat(raw.replace(/,/g, ""));
-      return Number.isFinite(n) ? n : "";
-    }
-
-    // "2024-06-07" -> "6/7/2024" to match the templates' Date: cells.
-    function formatDateMDY(isoValue) {
-      var raw = String(isoValue || "").trim();
-      var m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!m) return raw;
-      return parseInt(m[2], 10) + "/" + parseInt(m[3], 10) + "/" + m[1];
-    }
-
-    function setExpStatus(message, isError) {
-      refs.expStatus.textContent = message;
-      refs.expStatus.className = "status " + (isError ? "error" : "good");
+    // Two-column TSV (e.g. Name + Hours) sized to a template's input columns.
+    function twoColumnTSV(rows, keyA, keyB) {
+      return rows.map(function (row) {
+        return cleanCell(row[keyA]) + "\t" + cleanCell(row[keyB]);
+      }).join("\n");
     }
 
     function parseCSV(text) {
